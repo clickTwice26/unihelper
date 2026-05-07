@@ -1,22 +1,25 @@
-FROM node:20-alpine AS development-dependencies-env
-COPY . /app
+FROM node:22-alpine AS base
 WORKDIR /app
+
+FROM base AS deps
+COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:20-alpine AS production-dependencies-env
-COPY ./package.json package-lock.json /app/
-WORKDIR /app
-RUN npm ci --omit=dev
-
-FROM node:20-alpine AS build-env
-COPY . /app/
-COPY --from=development-dependencies-env /app/node_modules /app/node_modules
-WORKDIR /app
+FROM deps AS build
+COPY . .
+RUN npx prisma generate
 RUN npm run build
 
-FROM node:20-alpine
-COPY ./package.json package-lock.json /app/
-COPY --from=production-dependencies-env /app/node_modules /app/node_modules
-COPY --from=build-env /app/build /app/build
-WORKDIR /app
+FROM base AS runner
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+COPY --from=build /app/prisma ./prisma
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=build /app/build ./build
+COPY --from=build /app/public ./public
+COPY --from=build /app/react-router.config.ts ./react-router.config.ts
+EXPOSE 3000
+USER node
 CMD ["npm", "run", "start"]

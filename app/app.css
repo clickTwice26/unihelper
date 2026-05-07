@@ -1,15 +1,207 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  :root {
+    --page-bg: #07111f;
+    --page-bg-accent: #12334a;
+    --surface: rgba(7, 17, 31, 0.74);
+    --surface-border: rgba(148, 163, 184, 0.18);
+    --text-main: #eff6ff;
+    --text-muted: #cbd5e1;
+    --brand: #4ade80;
+    --brand-soft: rgba(74, 222, 128, 0.16);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-height: 100%;
+    background:
+      radial-gradient(circle at top left, rgba(74, 222, 128, 0.12), transparent 28%),
+      radial-gradient(circle at top right, rgba(56, 189, 248, 0.14), transparent 24%),
+      linear-gradient(180deg, var(--page-bg-accent), var(--page-bg));
+    color: var(--text-main);
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-main);
+    background: transparent;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+  }
+
+  a {
+    color: inherit;
+  }
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  color-scheme: dark;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  }
+@utility app-shell {
+  @apply min-h-screen;
+}
+
+@utility type-brand {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+@utility type-overline {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+@utility type-display-hero {
+  font-family: var(--font-display);
+  font-size: clamp(3.35rem, 5vw, 4.5rem);
+  font-weight: 700;
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+}
+
+@utility type-heading-lg {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 3vw, 3.15rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+@utility type-body-lg {
+  font-family: var(--font-sans);
+  font-size: 1.075rem;
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+@utility type-body-md {
+  font-family: var(--font-sans);
+  font-size: 0.98rem;
+  font-weight: 400;
+  line-height: 1.75;
+}
+
+@utility type-body-sm {
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.65;
+}
+
+@utility type-caption {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+@utility type-nav {
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+@utility nav-shell {
+  @apply sticky top-4 z-30 flex items-center justify-between gap-4 rounded-[2rem] border border-white/10 px-4 py-3 backdrop-blur-2xl sm:px-6;
+  background: linear-gradient(180deg, rgba(9, 15, 29, 0.78), rgba(8, 19, 32, 0.92));
+  box-shadow: 0 20px 60px rgba(2, 8, 23, 0.28);
+}
+
+@utility brand-lockup {
+  @apply flex items-center gap-3 no-underline;
+}
+
+@utility brand-mark {
+  @apply grid h-11 w-11 place-items-center rounded-2xl border border-emerald-300/30 text-base font-bold text-emerald-200;
+  font-family: var(--font-display);
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.22), rgba(56, 189, 248, 0.18));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+@utility nav-links {
+  @apply hidden items-center gap-2 rounded-full border border-white/8 bg-white/4 px-2 py-2 lg:flex;
+}
+
+@utility nav-link {
+  @apply type-nav rounded-full px-4 py-2 text-slate-300 transition duration-200 ease-out;
+}
+
+@utility nav-actions {
+  @apply flex items-center gap-3;
+}
+
+@utility nav-pill {
+  @apply type-nav rounded-full px-4 py-2 no-underline transition duration-200 ease-out;
+}
+
+@utility nav-pill-primary {
+  @apply text-slate-950;
+  background: linear-gradient(135deg, #4ade80, #67e8f9);
+  box-shadow: 0 12px 24px rgba(74, 222, 128, 0.22);
+}
+
+@utility nav-pill-secondary {
+  @apply border border-white/10 bg-white/6 text-slate-200;
+}
+
+.nav-link:hover {
+  @apply bg-white/7 text-white;
+}
+
+.nav-pill:hover {
+  transform: translateY(-1px);
+}
+
+@utility surface-panel {
+  @apply rounded-[2rem] border border-white/10 backdrop-blur-xl;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(7, 17, 31, 0.92));
+  box-shadow: 0 32px 80px rgba(2, 8, 23, 0.4);
+}
+
+@utility eyebrow {
+  @apply type-overline text-emerald-300;
+}
+
+@utility feature-card {
+  @apply type-body-sm rounded-3xl border border-white/8 bg-white/5 p-5 text-slate-200;
+}
+
+@utility metric-row {
+  @apply flex items-center justify-between gap-4 border-b border-white/8 pb-3 last:border-none last:pb-0;
+}
+
+@utility hero-grid {
+  @apply grid items-start lg:grid-cols-[minmax(0,1fr)_22rem];
 }
