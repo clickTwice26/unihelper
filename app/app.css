@@ -400,3 +400,39 @@ body {
 .dash-stat-sky      { border-color: rgba(56, 189, 248, 0.2); }
 .dash-stat-violet   { border-color: rgba(167, 139, 250, 0.2); }
 .dash-stat-amber    { border-color: rgba(251, 191, 36, 0.2); }
+
+/* ── Profile ── */
+
+@utility profile-avatar-lg {
+  @apply grid shrink-0 place-items-center rounded-3xl border-2 border-emerald-300/30 text-2xl font-bold text-emerald-200;
+  width: 5rem;
+  height: 5rem;
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.22), rgba(56, 189, 248, 0.18));
+  font-family: var(--font-display);
+}
+
+@utility dash-user-row-link {
+  @apply flex items-center gap-3 overflow-hidden rounded-xl px-2 py-2 no-underline transition duration-150;
+}
+
+@utility dash-avatar-sm {
+  @apply grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-emerald-300/30 text-xs font-bold text-emerald-200;
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.22), rgba(56, 189, 248, 0.18));
+  font-family: var(--font-display);
+}
+
+@utility dash-topbar-avatar-btn {
+  @apply flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 no-underline transition duration-150;
+}
+
+.dash-user-row-link:hover {
+  @apply bg-white/6;
+}
+
+.dash-user-row-link.active {
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.dash-topbar-avatar-btn:hover {
+  @apply bg-white/10;
+}
