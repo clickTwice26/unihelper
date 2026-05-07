@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   data,
-  Form,
-  Link,
   isRouteErrorResponse,
   Links,
   Meta,
@@ -14,12 +12,6 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-
-const navItems = [
-  { href: "/#overview", label: "Overview" },
-  { href: "/#runtime", label: "Runtime" },
-  { href: "/#next-steps", label: "Next Steps" },
-];
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -64,8 +56,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const data = useLoaderData<typeof loader>();
-
   return (
     <html lang="en">
       <head>
@@ -74,59 +64,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body className="app-shell">
-        <div className="nav-frame">
-          <header className="nav-shell">
-            <Link to="/" className="brand-lockup" aria-label="Unihelper home">
-              <span className="brand-mark">U</span>
-              <span>
-                <span className="type-brand block text-white">
-                  Unihelper
-                </span>
-                <span className="type-caption block text-slate-400">
-                  Remix-style full-stack workspace
-                </span>
-              </span>
-            </Link>
-
-            <nav className="nav-links" aria-label="Primary">
-              {navItems.map((item) => (
-                <a key={item.href} href={item.href} className="nav-link">
-                  {item.label}
-                </a>
-              ))}
-            </nav>
-
-            <div className="nav-actions">
-              {data.user ? (
-                <>
-                  <div className="nav-user-chip">
-                    <span className="type-caption block text-slate-400">Signed in</span>
-                    <span className="type-nav block text-white">
-                      {data.user.displayName ?? data.user.email}
-                    </span>
-                  </div>
-                  <Form action="/logout" method="post">
-                    <button className="nav-pill nav-pill-secondary" type="submit">
-                      Sign Out
-                    </button>
-                  </Form>
-                </>
-              ) : (
-                <>
-                  <Link to="/login" className="nav-pill nav-pill-secondary">
-                    Sign In
-                  </Link>
-                  <Link to="/register" className="nav-pill nav-pill-primary">
-                    Create Account
-                  </Link>
-                </>
-              )}
-            </div>
-          </header>
-        </div>
-
-        <div className="page-shell">{children}</div>
+      <body>
+        {children}
         <ScrollRestoration />
         <Scripts />
       </body>

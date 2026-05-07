@@ -88,7 +88,7 @@ export async function action({ request }: Route.ActionArgs) {
 
     return createUserSession(
       user.id,
-      "/",
+      "/dashboard",
       `Welcome, ${user.displayName ?? user.email}! Your account is ready.`
     );
   } catch (err) {

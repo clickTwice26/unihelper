@@ -291,3 +291,112 @@ body {
     transform: translateY(0) scale(1);
   }
 }
+
+/* ── Dashboard shell ── */
+
+@utility dash-shell {
+  @apply flex min-h-screen;
+  background: #07111f;
+}
+
+@utility dash-sidebar {
+  @apply fixed inset-y-0 left-0 z-30 flex w-60 flex-col;
+  background: linear-gradient(180deg, rgba(5, 10, 20, 0.99), rgba(4, 9, 18, 1));
+  border-right: 1px solid rgba(148, 163, 184, 0.09);
+}
+
+@utility dash-sidebar-brand {
+  @apply flex h-16 shrink-0 items-center border-b border-white/8 px-5;
+}
+
+@utility dash-sidebar-nav {
+  @apply flex flex-1 flex-col gap-0.5 overflow-y-auto p-3;
+}
+
+@utility dash-nav-link {
+  @apply type-body-sm flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-400 no-underline transition duration-150;
+}
+
+@utility dash-nav-icon {
+  @apply shrink-0 text-slate-500 transition duration-150;
+}
+
+@utility dash-sidebar-footer {
+  @apply shrink-0 space-y-3 border-t border-white/8 p-4;
+}
+
+@utility dash-user-row {
+  @apply flex items-center gap-3 overflow-hidden;
+}
+
+@utility dash-avatar {
+  @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-300/30 text-xs font-bold text-emerald-200;
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.22), rgba(56, 189, 248, 0.18));
+}
+
+@utility dash-signout-btn {
+  @apply type-caption w-full cursor-pointer rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-slate-400 transition duration-150;
+}
+
+@utility dash-body {
+  @apply ml-60 flex min-h-screen flex-1 flex-col;
+}
+
+@utility dash-topbar {
+  @apply fixed right-0 top-0 z-20 flex h-16 items-center justify-between px-6;
+  left: 15rem;
+  background: rgba(6, 13, 24, 0.92);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+  backdrop-filter: blur(20px);
+}
+
+@utility dash-topbar-badge {
+  @apply grid h-7 w-7 place-items-center rounded-lg text-emerald-400;
+  background: rgba(74, 222, 128, 0.12);
+}
+
+@utility dash-content {
+  @apply flex-1 overflow-y-auto px-6 py-8;
+  padding-top: calc(4rem + 2rem);
+}
+
+@utility dash-stat-card {
+  @apply surface-panel space-y-1.5 p-5;
+}
+
+@utility dash-stat-value {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 2.5vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: white;
+}
+
+/* Sidebar link hover / active states */
+.dash-nav-link:hover {
+  @apply bg-white/5 text-slate-200;
+}
+
+.dash-nav-link:hover .dash-nav-icon {
+  @apply text-slate-300;
+}
+
+.dash-nav-link.active {
+  background: rgba(74, 222, 128, 0.1);
+  color: #86efac;
+}
+
+.dash-nav-link.active .dash-nav-icon {
+  color: #4ade80;
+}
+
+.dash-signout-btn:hover {
+  @apply bg-white/8 text-slate-200;
+}
+
+/* Stat card accent colors */
+.dash-stat-emerald { border-color: rgba(74, 222, 128, 0.2); }
+.dash-stat-sky      { border-color: rgba(56, 189, 248, 0.2); }
+.dash-stat-violet   { border-color: rgba(167, 139, 250, 0.2); }
+.dash-stat-amber    { border-color: rgba(251, 191, 36, 0.2); }

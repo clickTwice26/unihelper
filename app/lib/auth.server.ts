@@ -190,3 +190,50 @@ export function isValidPassword(password: string) {
 export function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
 }
+
+export async function getUserById(id: string) {
+  return db.user.findUnique({
+    where: { id },
+    select: { id: true, email: true, displayName: true, passwordHash: true, createdAt: true },
+  });
+}
+
+export async function updateUserProfile(
+  id: string,
+  input: { displayName: string; email: string },
+) {
+  const email = normalizeEmail(input.email);
+
+  const conflict = await db.user.findFirst({
+    where: { email, NOT: { id } },
+    select: { id: true },
+  });
+
+  if (conflict) {
+    throw new Error("EMAIL_TAKEN");
+  }
+
+  return db.user.update({
+    where: { id },
+    data: { email, displayName: input.displayName.trim() || null },
+    select: { id: true, email: true, displayName: true },
+  });
+}
+
+export async function updateUserPassword(
+  id: string,
+  input: { currentPassword: string; newPassword: string },
+) {
+  const user = await db.user.findUnique({
+    where: { id },
+    select: { passwordHash: true },
+  });
+
+  if (!user) throw new Error("NOT_FOUND");
+
+  const valid = await verifyPassword(input.currentPassword, user.passwordHash);
+  if (!valid) throw new Error("WRONG_PASSWORD");
+
+  const passwordHash = await hashPassword(input.newPassword);
+  await db.user.update({ where: { id }, data: { passwordHash } });
+}

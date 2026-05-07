@@ -33,7 +33,7 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
-  const redirectTo = String(formData.get("redirectTo") ?? "/").trim() || "/";
+  const redirectTo = String(formData.get("redirectTo") ?? "/dashboard").trim() || "/dashboard";
 
   if (!email || !password) {
     return {
@@ -123,7 +123,7 @@ export default function Login() {
           )}
 
           <Form method="post" className="auth-form">
-            <input name="redirectTo" type="hidden" value="/" />
+            <input name="redirectTo" type="hidden" value="/dashboard" />
             <label className="auth-field">
               <span className="field-label">Email Address</span>
               <input
