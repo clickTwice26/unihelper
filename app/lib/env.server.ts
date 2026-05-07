@@ -17,4 +17,7 @@ export const env = cleanEnv(process.env, {
   REDIS_URL: str({
     devDefault: "redis://localhost:6379",
   }),
+  SESSION_SECRET: str({
+    devDefault: "dev-session-secret-change-me",
+  }),
 });

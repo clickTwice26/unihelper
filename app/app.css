@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif,
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 }
@@ -62,6 +62,14 @@ body {
 
 @utility app-shell {
   @apply min-h-screen;
+}
+
+@utility page-shell {
+  @apply min-h-screen pt-28 sm:pt-30;
+}
+
+@utility nav-frame {
+  @apply fixed inset-x-0 top-4 z-40 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
 }
 
 @utility type-brand {
@@ -134,7 +142,7 @@ body {
 }
 
 @utility nav-shell {
-  @apply sticky top-4 z-30 flex items-center justify-between gap-4 rounded-[2rem] border border-white/10 px-4 py-3 backdrop-blur-2xl sm:px-6;
+  @apply flex items-center justify-between gap-4 rounded-[2rem] border border-white/10 px-4 py-3 backdrop-blur-2xl sm:px-6;
   background: linear-gradient(180deg, rgba(9, 15, 29, 0.78), rgba(8, 19, 32, 0.92));
   box-shadow: 0 20px 60px rgba(2, 8, 23, 0.28);
 }
@@ -160,6 +168,10 @@ body {
 
 @utility nav-actions {
   @apply flex items-center gap-3;
+}
+
+@utility nav-user-chip {
+  @apply hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-2 sm:block;
 }
 
 @utility nav-pill {
@@ -204,4 +216,78 @@ body {
 
 @utility hero-grid {
   @apply grid items-start lg:grid-cols-[minmax(0,1fr)_22rem];
+}
+
+@utility auth-shell {
+  @apply mx-auto min-h-screen max-w-6xl px-6 py-10 sm:px-8 lg:px-10;
+}
+
+@utility auth-grid {
+  @apply grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start;
+}
+
+@utility auth-panel {
+  @apply space-y-6 p-8 sm:p-10;
+}
+
+@utility auth-form {
+  @apply space-y-5;
+}
+
+@utility auth-field {
+  @apply flex flex-col gap-2;
+}
+
+@utility field-label {
+  @apply type-caption text-slate-300;
+}
+
+@utility field-input {
+  @apply type-body-sm w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-100 outline-none transition duration-200 ease-out;
+}
+
+@utility field-helper {
+  @apply type-caption text-slate-400;
+}
+
+@utility auth-submit {
+  @apply type-nav inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-slate-950 transition duration-200 ease-out;
+  background: linear-gradient(135deg, #4ade80, #67e8f9);
+  box-shadow: 0 16px 32px rgba(74, 222, 128, 0.2);
+}
+
+@utility auth-link-row {
+  @apply flex flex-wrap items-center gap-3;
+}
+
+@utility status-banner {
+  @apply type-body-sm rounded-2xl border px-4 py-3;
+}
+
+@utility status-success {
+  @apply border-emerald-300/30 bg-emerald-300/10 text-emerald-100;
+}
+
+@utility status-error {
+  @apply border-rose-300/30 bg-rose-300/10 text-rose-100;
+}
+
+.field-input:focus {
+  border-color: rgba(74, 222, 128, 0.7);
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.12);
+}
+
+.auth-submit:hover {
+  transform: translateY(-1px);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

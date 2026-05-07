@@ -14,8 +14,8 @@ Production-grade full-stack React Router application using the maintained Remix-
 
 ## Typography Guideline
 
-- Use `Space Grotesk` only for brand moments and major headings.
-- Use `IBM Plex Sans` for navigation, labels, body copy, runtime data, and supporting text.
+- Use `Space Grotesk` for every text role in the product.
+- Differentiate hierarchy with weight, size, spacing, and case, not by switching font families.
 - Keep uppercase tracking only for overlines and the product wordmark, not for normal navigation or content blocks.
 - Use a single type scale in the UI:
 	- `type-display-hero` for the primary page headline

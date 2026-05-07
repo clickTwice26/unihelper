@@ -1,10 +1,15 @@
+import { useEffect, useState } from "react";
 import {
+  data,
+  Form,
+  Link,
   isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -25,11 +30,42 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap",
   },
 ];
 
+export async function loader({ request }: Route.LoaderArgs) {
+  const { getAuthenticatedUser } = await import("~/lib/auth.server");
+  const { parseFlash, clearFlash } = await import("~/lib/flash.server");
+
+  const [user, toast] = await Promise.all([
+    getAuthenticatedUser(request),
+    parseFlash(request),
+  ]);
+
+  const headers = new Headers();
+  if (toast) {
+    headers.append("Set-Cookie", await clearFlash());
+  }
+
+  return data(
+    {
+      user: user
+        ? {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName,
+          }
+        : null,
+      toast,
+    },
+    { headers }
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const data = useLoaderData<typeof loader>();
+
   return (
     <html lang="en">
       <head>
@@ -39,9 +75,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="app-shell">
-        <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <div className="nav-frame">
           <header className="nav-shell">
-            <a href="/" className="brand-lockup" aria-label="Unihelper home">
+            <Link to="/" className="brand-lockup" aria-label="Unihelper home">
               <span className="brand-mark">U</span>
               <span>
                 <span className="type-brand block text-white">
@@ -51,7 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   Remix-style full-stack workspace
                 </span>
               </span>
-            </a>
+            </Link>
 
             <nav className="nav-links" aria-label="Primary">
               {navItems.map((item) => (
@@ -62,17 +98,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </nav>
 
             <div className="nav-actions">
-              <a href="/health" className="nav-pill nav-pill-secondary">
-                Health
-              </a>
-              <a href="/#overview" className="nav-pill nav-pill-primary">
-                Launch Build
-              </a>
+              {data.user ? (
+                <>
+                  <div className="nav-user-chip">
+                    <span className="type-caption block text-slate-400">Signed in</span>
+                    <span className="type-nav block text-white">
+                      {data.user.displayName ?? data.user.email}
+                    </span>
+                  </div>
+                  <Form action="/logout" method="post">
+                    <button className="nav-pill nav-pill-secondary" type="submit">
+                      Sign Out
+                    </button>
+                  </Form>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="nav-pill nav-pill-secondary">
+                    Sign In
+                  </Link>
+                  <Link to="/register" className="nav-pill nav-pill-primary">
+                    Create Account
+                  </Link>
+                </>
+              )}
             </div>
           </header>
         </div>
 
-        {children}
+        <div className="page-shell">{children}</div>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -81,7 +135,46 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const { user, toast } = useLoaderData<typeof loader>();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!toast) {
+      setVisible(false);
+      return;
+    }
+    setVisible(true);
+    const t = setTimeout(() => setVisible(false), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  return (
+    <>
+      <div className="sr-only" aria-live="polite">
+        {user ? `Signed in as ${user.displayName ?? user.email}` : "Not signed in"}
+      </div>
+      {visible && toast && (
+        <div
+          className="fixed bottom-6 right-6 z-[9999] flex max-w-xs items-center gap-2.5 rounded-2xl border border-emerald-400/30 bg-[rgba(7,17,31,0.92)] px-4 py-3 text-sm font-medium text-emerald-100 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+          style={{ animation: "toast-in 0.35s ease-out" }}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="size-2 shrink-0 rounded-full bg-emerald-400" />
+          <span className="flex-1">{toast}</span>
+          <button
+            className="ml-1 cursor-pointer border-none bg-transparent pl-1 text-xs text-slate-400 transition-colors hover:text-slate-200"
+            onClick={() => setVisible(false)}
+            aria-label="Dismiss notification"
+            type="button"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      <Outlet />
+    </>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
