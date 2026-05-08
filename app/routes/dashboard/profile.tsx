@@ -128,10 +128,10 @@ export default function ProfilePage() {
         </div>
         <div className="space-y-0.5">
           <p className="eyebrow">Profile</p>
-          <h1 className="type-heading-lg text-white">
+          <h1 className="type-heading-lg text-slate-900">
             {user.displayName ?? user.email}
           </h1>
-          <p className="type-body-sm text-slate-400">{user.email}</p>
+          <p className="type-body-sm text-slate-500">{user.email}</p>
         </div>
       </div>
 

@@ -114,8 +114,8 @@ export default function Register() {
         <div className="surface-panel auth-panel">
           <div className="space-y-4">
             <p className="eyebrow">Create Account</p>
-            <h1 className="type-heading-lg max-w-xl text-white">Open a fresh workspace and start shipping faster.</h1>
-            <p className="type-body-md max-w-2xl text-slate-300">
+            <h1 className="type-heading-lg max-w-xl text-slate-900">Open a fresh workspace and start shipping faster.</h1>
+            <p className="type-body-md max-w-2xl text-slate-600">
               Registration is set up as a route-driven form so you can layer in email
               verification, workspace creation, onboarding, and invitations without
               restructuring the page.
@@ -144,7 +144,7 @@ export default function Register() {
         <section className="surface-panel auth-panel">
           <div className="space-y-2">
             <p className="eyebrow">Registration</p>
-            <p className="type-body-md text-slate-300">
+            <p className="type-body-md text-slate-600">
               Create your account scaffold now and attach the real identity flow after.
             </p>
           </div>

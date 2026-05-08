@@ -8,14 +8,14 @@
 
 @layer base {
   :root {
-    --page-bg: #07111f;
-    --page-bg-accent: #12334a;
-    --surface: rgba(7, 17, 31, 0.74);
-    --surface-border: rgba(148, 163, 184, 0.18);
-    --text-main: #eff6ff;
-    --text-muted: #cbd5e1;
-    --brand: #4ade80;
-    --brand-soft: rgba(74, 222, 128, 0.16);
+    --page-bg: #f8fafc;
+    --page-bg-accent: #f0fdf4;
+    --surface: rgba(255, 255, 255, 0.92);
+    --surface-border: rgba(15, 23, 42, 0.08);
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --brand: #16a34a;
+    --brand-soft: rgba(22, 163, 74, 0.1);
   }
 
   * {
@@ -25,8 +25,8 @@
   html {
     min-height: 100%;
     background:
-      radial-gradient(circle at top left, rgba(74, 222, 128, 0.12), transparent 28%),
-      radial-gradient(circle at top right, rgba(56, 189, 248, 0.14), transparent 24%),
+      radial-gradient(circle at top left, rgba(22, 163, 74, 0.06), transparent 28%),
+      radial-gradient(circle at top right, rgba(14, 165, 233, 0.05), transparent 24%),
       linear-gradient(180deg, var(--page-bg-accent), var(--page-bg));
     color: var(--text-main);
   }
@@ -57,7 +57,7 @@
 
 html,
 body {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @utility app-shell {
@@ -142,9 +142,9 @@ body {
 }
 
 @utility nav-shell {
-  @apply flex items-center justify-between gap-4 rounded-[2rem] border border-white/10 px-4 py-3 backdrop-blur-2xl sm:px-6;
-  background: linear-gradient(180deg, rgba(9, 15, 29, 0.78), rgba(8, 19, 32, 0.92));
-  box-shadow: 0 20px 60px rgba(2, 8, 23, 0.28);
+  @apply flex items-center justify-between gap-4 rounded-[2rem] border border-slate-900/8 px-4 py-3 backdrop-blur-2xl sm:px-6;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.07);
 }
 
 @utility brand-lockup {
@@ -159,11 +159,11 @@ body {
 }
 
 @utility nav-links {
-  @apply hidden items-center gap-2 rounded-full border border-white/8 bg-white/4 px-2 py-2 lg:flex;
+  @apply hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-2 lg:flex;
 }
 
 @utility nav-link {
-  @apply type-nav rounded-full px-4 py-2 text-slate-300 transition duration-200 ease-out;
+  @apply type-nav rounded-full px-4 py-2 text-slate-700 transition duration-200 ease-out;
 }
 
 @utility nav-actions {
@@ -171,7 +171,7 @@ body {
 }
 
 @utility nav-user-chip {
-  @apply hidden rounded-2xl border border-white/10 bg-white/5 px-4 py-2 sm:block;
+  @apply hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 sm:block;
 }
 
 @utility nav-pill {
@@ -185,11 +185,11 @@ body {
 }
 
 @utility nav-pill-secondary {
-  @apply border border-white/10 bg-white/6 text-slate-200;
+  @apply border border-slate-200 bg-white text-slate-700;
 }
 
 .nav-link:hover {
-  @apply bg-white/7 text-white;
+  @apply bg-slate-100 text-slate-900;
 }
 
 .nav-pill:hover {
@@ -197,21 +197,21 @@ body {
 }
 
 @utility surface-panel {
-  @apply rounded-[2rem] border border-white/10 backdrop-blur-xl;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(7, 17, 31, 0.92));
-  box-shadow: 0 32px 80px rgba(2, 8, 23, 0.4);
+  @apply rounded-[2rem] border border-slate-900/8 backdrop-blur-xl;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 32px rgba(15, 23, 42, 0.07);
 }
 
 @utility eyebrow {
-  @apply type-overline text-emerald-300;
+  @apply type-overline text-emerald-600;
 }
 
 @utility feature-card {
-  @apply type-body-sm rounded-3xl border border-white/8 bg-white/5 p-5 text-slate-200;
+  @apply type-body-sm rounded-3xl border border-slate-200 bg-slate-50 p-5 text-slate-700;
 }
 
 @utility metric-row {
-  @apply flex items-center justify-between gap-4 border-b border-white/8 pb-3 last:border-none last:pb-0;
+  @apply flex items-center justify-between gap-4 border-b border-slate-900/8 pb-3 last:border-none last:pb-0;
 }
 
 @utility hero-grid {
@@ -239,15 +239,15 @@ body {
 }
 
 @utility field-label {
-  @apply type-caption text-slate-300;
+  @apply type-caption text-slate-600;
 }
 
 @utility field-input {
-  @apply type-body-sm w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-100 outline-none transition duration-200 ease-out;
+  @apply type-body-sm w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition duration-200 ease-out;
 }
 
 @utility field-helper {
-  @apply type-caption text-slate-400;
+  @apply type-caption text-slate-500;
 }
 
 @utility auth-submit {
@@ -265,16 +265,16 @@ body {
 }
 
 @utility status-success {
-  @apply border-emerald-300/30 bg-emerald-300/10 text-emerald-100;
+  @apply border-emerald-500/30 bg-emerald-50 text-emerald-800;
 }
 
 @utility status-error {
-  @apply border-rose-300/30 bg-rose-300/10 text-rose-100;
+  @apply border-rose-500/30 bg-rose-50 text-rose-800;
 }
 
 .field-input:focus {
-  border-color: rgba(74, 222, 128, 0.7);
-  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.12);
+  border-color: rgba(22, 163, 74, 0.7);
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1);
 }
 
 .auth-submit:hover {
@@ -296,33 +296,63 @@ body {
 
 @utility dash-shell {
   @apply flex min-h-screen;
-  background: #07111f;
+  background:
+    radial-gradient(circle at top left, rgba(22, 163, 74, 0.06), transparent 22%),
+    linear-gradient(180deg, #f8fafc, #eef4fb);
 }
 
 @utility dash-sidebar {
-  @apply fixed inset-y-0 left-0 z-30 flex w-60 flex-col;
-  background: linear-gradient(180deg, rgba(5, 10, 20, 0.99), rgba(4, 9, 18, 1));
-  border-right: 1px solid rgba(148, 163, 184, 0.09);
+  @apply fixed inset-y-0 left-0 z-30 p-3;
+  width: 17rem;
+  transition: width 0.22s ease;
+}
+
+@utility dash-sidebar-panel {
+  @apply flex h-full flex-col overflow-hidden rounded-[2rem] border;
+  border-color: rgba(255, 255, 255, 0.8);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
 }
 
 @utility dash-sidebar-brand {
-  @apply flex h-16 shrink-0 items-center border-b border-white/8 px-5;
+  @apply flex h-16 w-full shrink-0 items-center justify-between gap-3 overflow-hidden border-b px-4;
+  border-color: rgba(148, 163, 184, 0.18);
 }
 
 @utility dash-sidebar-nav {
-  @apply flex flex-1 flex-col gap-0.5 overflow-y-auto p-3;
+  @apply flex flex-1 flex-col overflow-y-auto px-3 py-4;
+  gap: 1rem;
 }
 
 @utility dash-nav-link {
-  @apply type-body-sm flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-400 no-underline transition duration-150;
+  @apply flex items-center gap-3 rounded-2xl px-2.5 py-2 text-[0.88rem] font-medium text-slate-600 no-underline transition-all duration-150;
+  flex-wrap: nowrap;
+}
+
+@utility dash-nav-icon-wrap {
+  @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100/90;
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+@utility dash-nav-link-content {
+  @apply flex min-w-0 flex-1 items-center justify-between gap-2;
+  flex-wrap: nowrap;
 }
 
 @utility dash-nav-icon {
-  @apply shrink-0 text-slate-500 transition duration-150;
+  @apply shrink-0 text-slate-500 transition-colors duration-150;
 }
 
 @utility dash-sidebar-footer {
-  @apply shrink-0 space-y-3 border-t border-white/8 p-4;
+  @apply shrink-0 border-t p-3;
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+@utility dash-sidebar-profile-card {
+  @apply rounded-[1.5rem] border p-3;
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.84);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 @utility dash-user-row {
@@ -330,23 +360,41 @@ body {
 }
 
 @utility dash-avatar {
-  @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-300/30 text-xs font-bold text-emerald-200;
-  background: linear-gradient(135deg, rgba(74, 222, 128, 0.22), rgba(56, 189, 248, 0.18));
+  @apply grid h-10 w-10 shrink-0 place-items-center rounded-[1.15rem] border text-xs font-bold text-emerald-700;
+  border-color: rgba(22, 163, 74, 0.16);
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.95), rgba(209, 250, 229, 0.9));
 }
 
 @utility dash-signout-btn {
-  @apply type-caption w-full cursor-pointer rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-slate-400 transition duration-150;
+  @apply flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border bg-white px-3 text-[0.82rem] font-semibold text-slate-600 transition-all duration-150;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+@utility dash-collapse-btn {
+  @apply grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl border bg-white text-slate-500 transition-all duration-150;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+@utility dash-signout-icon-btn {
+  @apply grid h-10 w-full cursor-pointer place-items-center rounded-xl border bg-white text-slate-500 transition-all duration-150;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
 }
 
 @utility dash-body {
-  @apply ml-60 flex min-h-screen flex-1 flex-col;
+  @apply flex min-h-screen flex-1 flex-col;
+  margin-left: 17rem;
+  transition: margin-left 0.22s ease;
 }
 
 @utility dash-topbar {
-  @apply fixed right-0 top-0 z-20 flex h-16 items-center justify-between px-6;
-  left: 15rem;
-  background: rgba(6, 13, 24, 0.92);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+  @apply fixed right-0 top-0 z-20 flex h-15 items-center justify-between px-6;
+  left: 17rem;
+  transition: left 0.22s ease;
+  background: rgba(248, 250, 252, 0.82);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.05);
   backdrop-filter: blur(20px);
 }
 
@@ -357,7 +405,7 @@ body {
 
 @utility dash-content {
   @apply flex-1 overflow-y-auto px-6 py-8;
-  padding-top: calc(4rem + 2rem);
+  padding-top: calc(3.5rem + 2rem);
 }
 
 @utility dash-stat-card {
@@ -370,36 +418,76 @@ body {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: white;
+  color: #0f172a;
 }
 
 /* Sidebar link hover / active states */
 .dash-nav-link:hover {
-  @apply bg-white/5 text-slate-200;
+  @apply bg-white text-slate-900;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.dash-nav-link:hover .dash-nav-icon-wrap {
+  @apply bg-slate-900;
 }
 
 .dash-nav-link:hover .dash-nav-icon {
-  @apply text-slate-300;
+  color: white;
 }
 
 .dash-nav-link.active {
-  background: rgba(74, 222, 128, 0.1);
-  color: #86efac;
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.95), rgba(240, 253, 250, 0.9));
+  color: #0f172a;
+  box-shadow:
+    inset 0 0 0 1px rgba(22, 163, 74, 0.12),
+    0 12px 24px rgba(22, 163, 74, 0.08);
+  font-weight: 600;
+}
+
+.dash-nav-link.active .dash-nav-icon-wrap {
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  box-shadow: 0 10px 18px rgba(22, 163, 74, 0.18);
 }
 
 .dash-nav-link.active .dash-nav-icon {
-  color: #4ade80;
+  color: white;
+}
+
+.dash-nav-link.disabled {
+  color: #475569;
+}
+
+.dash-nav-link.disabled:hover {
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: none;
+  transform: none;
+}
+
+.dash-nav-link.disabled:hover .dash-nav-icon-wrap {
+  @apply bg-slate-100/90;
+}
+
+.dash-nav-link.disabled:hover .dash-nav-icon {
+  color: #64748b;
 }
 
 .dash-signout-btn:hover {
-  @apply bg-white/8 text-slate-200;
+  @apply bg-slate-50 text-slate-900;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
+}
+
+.dash-collapse-btn:hover,
+.dash-signout-icon-btn:hover {
+  @apply bg-slate-50 text-slate-900;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
 }
 
 /* Stat card accent colors */
-.dash-stat-emerald { border-color: rgba(74, 222, 128, 0.2); }
-.dash-stat-sky      { border-color: rgba(56, 189, 248, 0.2); }
-.dash-stat-violet   { border-color: rgba(167, 139, 250, 0.2); }
-.dash-stat-amber    { border-color: rgba(251, 191, 36, 0.2); }
+.dash-stat-emerald { border-color: rgba(22, 163, 74, 0.3); }
+.dash-stat-sky      { border-color: rgba(14, 165, 233, 0.3); }
+.dash-stat-violet   { border-color: rgba(124, 58, 237, 0.3); }
+.dash-stat-amber    { border-color: rgba(217, 119, 6, 0.3); }
 
 /* ── Profile ── */
 
@@ -412,27 +500,90 @@ body {
 }
 
 @utility dash-user-row-link {
-  @apply flex items-center gap-3 overflow-hidden rounded-xl px-2 py-2 no-underline transition duration-150;
+  @apply flex items-center gap-3 overflow-hidden rounded-2xl p-2.5 no-underline transition-all duration-150;
 }
 
 @utility dash-avatar-sm {
-  @apply grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-emerald-300/30 text-xs font-bold text-emerald-200;
-  background: linear-gradient(135deg, rgba(74, 222, 128, 0.22), rgba(56, 189, 248, 0.18));
+  @apply grid h-8 w-8 shrink-0 place-items-center rounded-xl border text-xs font-bold text-emerald-700;
+  border-color: rgba(22, 163, 74, 0.16);
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.95), rgba(209, 250, 229, 0.9));
   font-family: var(--font-display);
 }
 
 @utility dash-topbar-avatar-btn {
-  @apply flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-1.5 no-underline transition duration-150;
+  @apply flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 no-underline transition-colors duration-100;
 }
 
 .dash-user-row-link:hover {
-  @apply bg-white/6;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
 }
 
 .dash-user-row-link.active {
-  background: rgba(74, 222, 128, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    inset 0 0 0 1px rgba(22, 163, 74, 0.12),
+    0 10px 18px rgba(15, 23, 42, 0.05);
 }
 
 .dash-topbar-avatar-btn:hover {
-  @apply bg-white/10;
+  @apply bg-slate-50;
+}
+
+@utility dash-nav-section {
+  @apply space-y-1.5;
+}
+
+@utility dash-nav-section-label {
+  @apply px-2.5 pb-1 text-[0.68rem] font-semibold uppercase text-slate-400;
+  letter-spacing: 0.22em;
+}
+
+@utility dash-topbar-icon-btn {
+  @apply grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors duration-100;
+}
+
+.dash-topbar-icon-btn:hover {
+  @apply bg-slate-50 text-slate-700;
+}
+
+@utility dash-brand-copy {
+  @apply min-w-0;
+}
+
+@utility dash-brand-mark {
+  @apply h-10 w-10 rounded-[1.15rem] border text-sm text-emerald-700;
+  border-color: rgba(22, 163, 74, 0.16);
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.98), rgba(209, 250, 229, 0.94));
+  box-shadow: 0 10px 20px rgba(22, 163, 74, 0.12);
+}
+
+@utility dash-brand-meta {
+  @apply mt-0.5 block truncate text-[0.72rem] font-medium text-slate-500;
+}
+
+@utility dash-sidebar-toggle {
+  @apply grid h-9 w-9 place-items-center rounded-xl border bg-white text-slate-500 transition-all duration-150;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+.dash-sidebar-toggle:hover {
+  @apply bg-slate-50 text-slate-900;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
+}
+
+@utility dash-nav-link-label {
+  @apply block min-w-0 truncate leading-none;
+}
+
+@utility dash-nav-badge {
+  @apply shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[0.62rem] font-semibold uppercase leading-none text-slate-400;
+  letter-spacing: 0.08em;
+}
+
+@utility dash-sidebar-divider {
+  height: 1px;
+  margin: 0.75rem 0;
+  background: rgba(148, 163, 184, 0.16);
 }

@@ -53,8 +53,8 @@ export default function DashboardHome() {
       {/* Header */}
       <div className="space-y-1">
         <p className="eyebrow">Overview</p>
-        <h1 className="type-heading-lg text-white">Welcome to your workspace</h1>
-        <p className="type-body-md max-w-xl text-slate-400">
+        <h1 className="type-heading-lg text-slate-900">Welcome to your workspace</h1>
+        <p className="type-body-md max-w-xl text-slate-500">
           Your infrastructure is running. Start building features, not scaffolding.
         </p>
       </div>
@@ -63,9 +63,9 @@ export default function DashboardHome() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats(userCount, activeSessionCount).map((stat) => (
           <div key={stat.label} className={`dash-stat-card dash-stat-${stat.color}`}>
-            <p className="type-caption text-slate-400">{stat.label}</p>
+            <p className="type-caption text-slate-500">{stat.label}</p>
             <p className="dash-stat-value">{stat.value}</p>
-            <p className="type-caption text-slate-500">{stat.sub}</p>
+            <p className="type-caption text-slate-400">{stat.sub}</p>
           </div>
         ))}
       </div>
@@ -74,7 +74,7 @@ export default function DashboardHome() {
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="surface-panel space-y-4 p-6">
           <p className="eyebrow">Stack</p>
-          <dl className="type-body-sm space-y-3 text-slate-300">
+          <dl className="type-body-sm space-y-3 text-slate-700">
             {[
               ["Framework", "React Router v7 (framework mode)"],
               ["ORM", "Prisma 6 + PostgreSQL"],
@@ -83,8 +83,8 @@ export default function DashboardHome() {
               ["Infra", "Docker Compose (local)"],
             ].map(([k, v]) => (
               <div key={k} className="metric-row">
-                <dt className="text-slate-400">{k}</dt>
-                <dd className="text-right text-slate-200">{v}</dd>
+                <dt className="text-slate-500">{k}</dt>
+                <dd className="text-right text-slate-800">{v}</dd>
               </div>
             ))}
           </dl>
@@ -92,7 +92,7 @@ export default function DashboardHome() {
 
         <section className="surface-panel space-y-4 p-6">
           <p className="eyebrow">Next Steps</p>
-          <ul className="type-body-sm space-y-3 text-slate-300">
+          <ul className="type-body-sm space-y-3 text-slate-700">
             {[
               "Model your first bounded context in prisma/schema.prisma",
               "Place server-only domain logic in app/lib/*.server.ts",
@@ -101,7 +101,7 @@ export default function DashboardHome() {
               "Add email verification and magic link flows",
             ].map((step) => (
               <li key={step} className="flex items-start gap-3">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-400" />
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-500" />
                 <span>{step}</span>
               </li>
             ))}

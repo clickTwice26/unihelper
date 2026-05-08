@@ -90,11 +90,11 @@ export default function App() {
   return (
     <>
       <div className="sr-only" aria-live="polite">
-        {user ? `Signed in as ${user.displayName ?? user.email}` : "Not signed in"}
+        {user ? `${user.displayName ?? user.email}` : "Not signed in"}
       </div>
       {visible && toast && (
         <div
-          className="fixed bottom-6 right-6 z-[9999] flex max-w-xs items-center gap-2.5 rounded-2xl border border-emerald-400/30 bg-[rgba(7,17,31,0.92)] px-4 py-3 text-sm font-medium text-emerald-100 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md"
+          className="fixed bottom-6 right-6 z-[9999] flex max-w-xs items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-white px-4 py-3 text-sm font-medium text-emerald-800 shadow-[0_8px_32px_rgba(15,23,42,0.12)] backdrop-blur-md"
           style={{ animation: "toast-in 0.35s ease-out" }}
           role="status"
           aria-live="polite"
@@ -102,7 +102,7 @@ export default function App() {
           <span className="size-2 shrink-0 rounded-full bg-emerald-400" />
           <span className="flex-1">{toast}</span>
           <button
-            className="ml-1 cursor-pointer border-none bg-transparent pl-1 text-xs text-slate-400 transition-colors hover:text-slate-200"
+            className="ml-1 cursor-pointer border-none bg-transparent pl-1 text-xs text-slate-400 transition-colors hover:text-slate-600"
             onClick={() => setVisible(false)}
             aria-label="Dismiss notification"
             type="button"
@@ -137,9 +137,9 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <section className="surface-panel w-full space-y-4 p-8">
         <p className="eyebrow">Application Error</p>
         <h1 className="type-heading-lg">{message}</h1>
-        <p className="type-body-md max-w-2xl text-slate-300">{details}</p>
+        <p className="type-body-md max-w-2xl text-slate-600">{details}</p>
         {stack && (
-          <pre className="type-body-sm max-h-96 w-full overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/80 p-4 text-slate-200">
+          <pre className="type-body-sm max-h-96 w-full overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
             <code>{stack}</code>
           </pre>
         )}

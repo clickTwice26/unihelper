@@ -82,8 +82,8 @@ export default function Login() {
         <div className="surface-panel auth-panel">
           <div className="space-y-4">
             <p className="eyebrow">Welcome Back</p>
-            <h1 className="type-heading-lg max-w-xl text-white">Sign in to continue building inside Unihelper.</h1>
-            <p className="type-body-md max-w-2xl text-slate-300">
+            <h1 className="type-heading-lg max-w-xl text-slate-900">Sign in to continue building inside Unihelper.</h1>
+            <p className="type-body-md max-w-2xl text-slate-600">
               Use this page as the foundation for password auth, magic links, SSO,
               or any external identity provider you attach later.
             </p>
@@ -111,7 +111,7 @@ export default function Login() {
         <section className="surface-panel auth-panel">
           <div className="space-y-2">
             <p className="eyebrow">Sign In</p>
-            <p className="type-body-md text-slate-300">
+            <p className="type-body-md text-slate-600">
               Enter your account credentials to access your workspace.
             </p>
           </div>

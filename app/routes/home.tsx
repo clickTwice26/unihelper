@@ -37,10 +37,10 @@ export default function Home() {
         <div className="surface-panel space-y-8 p-8 sm:p-10">
           <div className="space-y-4">
             <p className="eyebrow">Full-Stack Foundation</p>
-            <h1 className="type-display-hero max-w-3xl text-white">
+            <h1 className="type-display-hero max-w-3xl text-slate-900">
               {data.appName} is ready for product work, not template cleanup.
             </h1>
-            <p className="type-body-lg max-w-2xl text-slate-300">
+            <p className="type-body-lg max-w-2xl text-slate-600">
               The app is structured for server-rendered UI, background-safe server modules,
               operational health checks, PostgreSQL persistence, and Redis-backed runtime
               concerns.
@@ -59,7 +59,7 @@ export default function Home() {
         <aside className="space-y-6">
           <section id="runtime" className="surface-panel scroll-mt-28 p-6">
             <p className="eyebrow">Runtime</p>
-            <dl className="type-body-sm mt-5 space-y-4 text-slate-300">
+            <dl className="type-body-sm mt-5 space-y-4 text-slate-700">
               <div className="metric-row">
                 <dt>Environment</dt>
                 <dd>{data.environment}</dd>
@@ -85,7 +85,7 @@ export default function Home() {
 
           <section id="next-steps" className="surface-panel scroll-mt-28 p-6">
             <p className="eyebrow">Suggested Next Moves</p>
-            <ul className="type-body-sm mt-5 space-y-3 text-slate-300">
+            <ul className="type-body-sm mt-5 space-y-3 text-slate-700">
               <li>Model your first bounded context in prisma/schema.prisma.</li>
               <li>Place server-only domain logic in app/lib/*.server.ts modules.</li>
               <li>Introduce feature routes behind authenticated layouts as the product grows.</li>

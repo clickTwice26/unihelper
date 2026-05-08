@@ -19,8 +19,8 @@ export default function MarketingLayout() {
           <Link to="/" className="brand-lockup" aria-label="Unihelper home">
             <span className="brand-mark">U</span>
             <span>
-              <span className="type-brand block text-white">Unihelper</span>
-              <span className="type-caption block text-slate-400">
+              <span className="type-brand block text-slate-900">Unihelper</span>
+              <span className="type-caption block text-slate-500">
                 Remix-style full-stack workspace
               </span>
             </span>
