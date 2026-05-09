@@ -6,6 +6,7 @@ import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
+import { env } from "~/lib/env.server";
 
 export const streamTimeout = 5_000;
 
@@ -99,7 +100,8 @@ export default function handleRequest(
               // Tailwind inlines style attributes; Google Fonts needs style-src
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data:",
+              `img-src 'self' data: ${env.R2_PUBLIC_URL}`,
+              `frame-src 'self' ${env.R2_PUBLIC_URL}`,
               "connect-src 'self' ws: wss:",
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",

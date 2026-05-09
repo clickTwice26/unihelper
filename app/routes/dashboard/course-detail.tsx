@@ -1,13 +1,16 @@
 import { useRef, useState } from "react";
-import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { Form, Link, useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   BookOpen,
+  Check,
   ChevronRight,
+  Copy,
   Edit2,
   ExternalLink,
+  Download,
+  Eye,
   File,
-  FilePlus,
   FolderOpen,
   FolderPlus,
   HardDrive,
@@ -73,7 +76,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ]);
   }
 
-  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath };
+  const r2PublicUrl = (await import("~/lib/env.server")).env.R2_PUBLIC_URL.replace(/\/$/, "");
+  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -148,6 +152,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       throw await flash("success", `"${uploadable.name}" uploaded.`);
     } catch (err) {
       if (err instanceof Response) throw err;
+      console.error("[upload-file] error:", err);
       const msgs: Record<string, string> = {
         EMPTY_FILE: "Cannot upload an empty file.",
         FILE_TOO_LARGE: "File exceeds the 50 MB per-file limit.",
@@ -155,7 +160,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         FORBIDDEN: "You don't have permission.",
         COURSE_NOT_FOUND: "Course not found.",
       };
-      throw await flash("error", err instanceof Error ? (msgs[err.message] ?? "Upload failed.") : "Upload failed.");
+      const detail = err instanceof Error ? err.message : String(err);
+      throw await flash("error", err instanceof Error ? (msgs[err.message] ?? `Upload failed: ${detail}`) : `Upload failed: ${detail}`);
     }
   }
 
@@ -521,24 +527,154 @@ type StorageFile = {
   courseId: string;
 };
 
+function previewType(mimeType: string | null): "image" | "video" | "pdf" | "none" {
+  if (!mimeType) return "none";
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType === "application/pdf") return "pdf";
+  return "none";
+}
+
+function FilePreviewModal({
+  file,
+  courseId,
+  onClose,
+}: {
+  file: StorageFile;
+  courseId: string;
+  onClose: () => void;
+}) {
+  const fileUrl = `/dashboard/courses/${courseId}/files/${file.id}`;
+  const downloadUrl = `${fileUrl}?download=1`;
+  const kind = previewType(file.mimeType);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-950/90"
+      style={{ backdropFilter: "blur(6px)" }}
+    >
+      {/* Keyboard close */}
+      <div
+        className="absolute inset-0"
+        onClick={onClose}
+        role="button"
+        tabIndex={-1}
+        aria-label="Close preview"
+        onKeyDown={(e) => e.key === "Escape" && onClose()}
+      />
+
+      {/* Shell (sits above the backdrop click-trap) */}
+      <div className="pointer-events-none relative z-10 flex h-full flex-col">
+        {/* Header */}
+        <div className="pointer-events-auto flex shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-slate-900 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <File size={15} className="shrink-0 text-slate-400" />
+            <span className="truncate text-sm font-semibold text-white">{file.name}</span>
+            <span className="hidden shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-slate-400 sm:block">
+              {formatBytes(file.size)}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <a
+              href={downloadUrl}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+            >
+              <Download size={13} />
+              Download
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close preview"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content area — takes remaining height */}
+        <div className="pointer-events-auto relative flex flex-1 items-center justify-center overflow-hidden p-4">
+          {kind === "image" && (
+            <img
+              src={fileUrl}
+              alt={file.name}
+              className="rounded-lg object-contain shadow-2xl"
+              style={{ maxWidth: "100%", maxHeight: "100%" }}
+            />
+          )}
+          {kind === "video" && (
+            <video
+              src={fileUrl}
+              controls
+              className="rounded-lg shadow-2xl"
+              style={{ maxWidth: "100%", maxHeight: "100%" }}
+            />
+          )}
+          {kind === "pdf" && (
+            <iframe
+              src={fileUrl}
+              title={file.name}
+              className="h-full w-full rounded-lg bg-white shadow-2xl"
+            />
+          )}
+          {kind === "none" && (
+            <div className="flex flex-col items-center gap-5 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/10">
+                <File size={36} className="text-slate-300" />
+              </div>
+              <p className="text-sm font-medium text-slate-300">
+                Preview not available for this file type.
+              </p>
+              <a
+                href={downloadUrl}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
+              >
+                <Download size={15} />
+                Download File
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StorageTab({
   courseId,
   storagePath,
   storageFiles,
   storageUsageBytes,
   navigation,
+  r2PublicUrl,
 }: {
   courseId: string;
   storagePath: string;
   storageFiles: StorageFile[];
   storageUsageBytes: number;
   navigation: ReturnType<typeof useNavigation>;
+  r2PublicUrl: string;
 }) {
   const [, setSearchParams] = useSearchParams();
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<StorageFile | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadFileName, setUploadFileName] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  function copyShareLink(item: StorageFile) {
+    const encodedKey = item.key.split("/").map(encodeURIComponent).join("/");
+    const url = `${r2PublicUrl}/${encodedKey}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadFormRef = useRef<HTMLFormElement>(null);
+  const revalidator = useRevalidator();
 
   const isSubmitting = navigation.state === "submitting";
   const submittingIntent = String(navigation.formData?.get("intent") ?? "");
@@ -560,6 +696,46 @@ function StorageTab({
   }
 
   const storageBackHref = `/dashboard/courses/${courseId}?tab=storage&path=${encodeURIComponent(storagePath)}`;
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadFileName(file.name);
+    setUploadProgress(0);
+    setUploadError(null);
+
+    const fd = new FormData();
+    fd.append("intent", "upload-file");
+    fd.append("path", storagePath);
+    fd.append("backHref", storageBackHref);
+    fd.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", window.location.pathname + window.location.search);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        setUploadProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      setUploadProgress(null);
+      setUploadFileName("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      revalidator.revalidate();
+    };
+
+    xhr.onerror = () => {
+      setUploadProgress(null);
+      setUploadFileName("");
+      setUploadError("Upload failed. Check your connection and try again.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    xhr.send(fd);
+  }
 
   return (
     <div className="px-6 py-5 space-y-5">
@@ -598,31 +774,50 @@ function StorageTab({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            disabled={uploadProgress !== null}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
           >
             <Upload size={15} />
             Upload
           </button>
-          {/* Hidden upload form */}
-          <Form
-            method="post"
-            encType="multipart/form-data"
-            preventScrollReset
-            ref={uploadFormRef}
+          {/* Hidden file input — XHR handles the actual upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
             className="hidden"
-          >
-            <input type="hidden" name="intent" value="upload-file" />
-            <input type="hidden" name="path" value={storagePath} />
-            <input type="hidden" name="backHref" value={storageBackHref} />
-            <input
-              ref={fileInputRef}
-              type="file"
-              name="file"
-              onChange={() => uploadFormRef.current?.requestSubmit()}
-            />
-          </Form>
+            onChange={handleFileChange}
+          />
         </div>
       </div>
+
+      {/* Upload progress */}
+      {uploadProgress !== null ? (
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="flex min-w-0 items-center gap-2 font-medium text-indigo-700">
+              <Upload size={13} className="shrink-0 animate-pulse" />
+              <span className="truncate">Uploading {uploadFileName}…</span>
+            </span>
+            <span className="shrink-0 font-semibold text-indigo-700">{uploadProgress}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-indigo-200">
+            <div
+              className="h-full rounded-full bg-indigo-500 transition-all duration-150"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {/* Inline upload error */}
+      {uploadError ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{uploadError}</span>
+          <button type="button" onClick={() => setUploadError(null)} className="shrink-0 text-red-400 hover:text-red-700 transition">
+            <X size={15} />
+          </button>
+        </div>
+      ) : null}
 
       {/* Usage bar */}
       <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
@@ -688,14 +883,13 @@ function StorageTab({
                             {item.name}
                           </button>
                         ) : (
-                          <a
-                            href={`/dashboard/courses/${courseId}/files/${item.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="truncate font-medium text-slate-800 transition-colors hover:text-indigo-600"
+                          <button
+                            type="button"
+                            onClick={() => setPreviewItem(item)}
+                            className="truncate text-left font-medium text-slate-800 transition-colors hover:text-indigo-600"
                           >
                             {item.name}
-                          </a>
+                          </button>
                         )}
                       </div>
                     </td>
@@ -734,17 +928,37 @@ function StorageTab({
                           </Form>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="flex items-center justify-end gap-1">
                           {!item.isFolder && (
-                            <a
-                              href={`/dashboard/courses/${courseId}/files/${item.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                              title="Download / Open"
-                            >
-                              <FilePlus size={15} />
-                            </a>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewItem(item)}
+                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-indigo-600"
+                                title="Preview"
+                              >
+                                <Eye size={15} />
+                              </button>
+                              <a
+                                href={`/dashboard/courses/${courseId}/files/${item.id}?download=1`}
+                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                title="Download"
+                              >
+                                <Download size={15} />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => copyShareLink(item)}
+                                className={`rounded-lg p-1.5 transition ${
+                                  copiedId === item.id
+                                    ? "text-green-600"
+                                    : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                }`}
+                                title={copiedId === item.id ? "Copied!" : "Copy shareable link"}
+                              >
+                                {copiedId === item.id ? <Check size={15} /> : <Copy size={15} />}
+                              </button>
+                            </>
                           )}
                           <button
                             type="button"
@@ -771,6 +985,14 @@ function StorageTab({
           courseId={courseId}
           isSubmitting={isSubmitting}
           onClose={() => setShowNewFolder(false)}
+        />
+      ) : null}
+
+      {previewItem ? (
+        <FilePreviewModal
+          file={previewItem}
+          courseId={courseId}
+          onClose={() => setPreviewItem(null)}
         />
       ) : null}
     </div>
@@ -802,7 +1024,7 @@ function InfoRow({
 }
 
 export default function CourseDetailPage() {
-  const { course, backHref, storageFiles, storageUsageBytes, storagePath } =
+  const { course, backHref, storageFiles, storageUsageBytes, storagePath, r2PublicUrl } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1032,6 +1254,7 @@ export default function CourseDetailPage() {
             storageFiles={storageFiles as StorageFile[]}
             storageUsageBytes={storageUsageBytes}
             navigation={navigation}
+            r2PublicUrl={r2PublicUrl}
           />
         ) : null}
       </div>

@@ -192,7 +192,9 @@ export async function deleteStorageItem(actorId: string, fileId: string): Promis
 export function getPublicDownloadUrl(key: string): string {
   // Strip trailing slash from public URL just in case
   const base = env.R2_PUBLIC_URL.replace(/\/$/, "");
-  return `${base}/${key}`;
+  // Encode each path segment so spaces and special chars work in URLs
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  return `${base}/${encodedKey}`;
 }
 
 /** Human-readable file size string. */
