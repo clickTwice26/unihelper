@@ -20,4 +20,11 @@ export const env = cleanEnv(process.env, {
   SESSION_SECRET: str({
     devDefault: "dev-session-secret-change-me",
   }),
+  // Cloudflare R2 Storage
+  R2_ACCOUNT_ID: str(),
+  R2_ACCESS_KEY_ID: str(),
+  R2_SECRET_ACCESS_KEY: str(),
+  R2_BUCKET: str(),
+  R2_ENDPOINT: str(),
+  R2_PUBLIC_URL: str(),
 });

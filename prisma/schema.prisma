@@ -74,19 +74,36 @@ model BuddyConnection {
 }
 
 model Course {
-  id           String   @id @default(cuid())
+  id           String       @id @default(cuid())
   title        String
   creditHours  Float
   teacherName  String
-  teacherInfo  String?  @db.Text
+  teacherInfo  String?      @db.Text
   teacherEmail String?
   teacherPhone String?
   blcLink      String?
   groupLink    String?
   ownerId      String
-  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  files        CourseFile[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([ownerId, createdAt])
+}
+
+model CourseFile {
+  id        String   @id @default(cuid())
+  courseId  String
+  key       String   // R2 object key (full path)
+  name      String   // display name
+  path      String   // parent folder path, e.g. "/" or "/Lectures/"
+  isFolder  Boolean  @default(false)
+  size      Int      @default(0) // bytes (0 for folders)
+  mimeType  String?
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([courseId, key], name: "courseId_key")
+  @@index([courseId, path])
 }
