@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Form, Link, NavLink, Outlet, redirect, useLoaderData } from "react-router";
+import { Form, Link, NavLink, Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import {
   Search,
   Home,
@@ -49,6 +49,14 @@ const footerItems = [
 export default function DashboardLayout() {
   const { user } = useLoaderData<typeof loader>();
   const [collapsed, setCollapsed] = useState(false);
+  const { pathname } = useLocation();
+
+  const pageTitle = (() => {
+    if (pathname === "/dashboard" || pathname === "/dashboard/home") return "Dashboard";
+    if (pathname.startsWith("/dashboard/profile")) return "Profile";
+    const segment = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
+    return segment.charAt(0).toUpperCase() + segment.slice(1);
+  })();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
 
@@ -259,7 +267,7 @@ export default function DashboardLayout() {
       >
         <header className="sticky top-0 z-20 h-[4.5rem] bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-3">
-             <span className="text-[1.1rem] font-semibold text-slate-800 tracking-tight">Dashboard View</span>
+             <span className="text-[1.1rem] font-semibold text-slate-800 tracking-tight">{pageTitle}</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -282,6 +290,13 @@ export default function DashboardLayout() {
                     <p className="text-[0.875rem] font-semibold text-slate-900 truncate">{user.displayName ?? user.email}</p>
                     <p className="text-[0.78rem] text-slate-500 truncate mt-0.5">{user.email}</p>
                   </div>
+                  <Link
+                    to="/dashboard/profile"
+                    onClick={() => setAvatarOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-[0.875rem] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    View profile
+                  </Link>
                   <Form action="/logout" method="post">
                     <button
                       type="submit"

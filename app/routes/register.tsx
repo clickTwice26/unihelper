@@ -30,6 +30,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  const { rateLimit, getClientIp } = await import("~/lib/ratelimit.server");
+  // 5 registrations per hour per IP
+  await rateLimit({ key: `register:${getClientIp(request)}`, limit: 5, windowSec: 3600 });
+
   const { createUserSession, findUserByEmail, isValidEmail, isValidPassword, registerUser } = await import("~/lib/auth.server");
   const formData = await request.formData();
   const fullName = String(formData.get("fullName") ?? "").trim();

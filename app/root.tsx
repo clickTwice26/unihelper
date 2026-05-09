@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   data,
   isRouteErrorResponse,
@@ -9,8 +9,10 @@ import {
   ScrollRestoration,
   useLoaderData,
 } from "react-router";
+import { CheckCircle, XCircle, AlertTriangle, X } from "lucide-react";
 
 import type { Route } from "./+types/root";
+import type { FlashMessage } from "~/lib/flash.server";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -75,42 +77,96 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { user, toast } = useLoaderData<typeof loader>();
+  const [current, setCurrent] = useState<FlashMessage | null>(null);
   const [visible, setVisible] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!toast) {
-      setVisible(false);
-      return;
-    }
+    if (!toast) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setCurrent(toast);
     setVisible(true);
-    const t = setTimeout(() => setVisible(false), 4000);
-    return () => clearTimeout(t);
+    timerRef.current = setTimeout(() => setVisible(false), 5000);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [toast]);
+
+  const variants = {
+    success: {
+      icon: CheckCircle,
+      bar: "bg-emerald-500",
+      iconClass: "text-emerald-500",
+      title: "text-emerald-900",
+      msg: "text-emerald-700",
+      border: "border-emerald-100",
+      bg: "bg-emerald-50",
+    },
+    error: {
+      icon: XCircle,
+      bar: "bg-rose-500",
+      iconClass: "text-rose-500",
+      title: "text-rose-900",
+      msg: "text-rose-700",
+      border: "border-rose-100",
+      bg: "bg-rose-50",
+    },
+    warning: {
+      icon: AlertTriangle,
+      bar: "bg-amber-400",
+      iconClass: "text-amber-500",
+      title: "text-amber-900",
+      msg: "text-amber-700",
+      border: "border-amber-100",
+      bg: "bg-amber-50",
+    },
+  };
+
+  const v = current ? variants[current.type] : null;
+  const Icon = v ? v.icon : null;
 
   return (
     <>
       <div className="sr-only" aria-live="polite">
         {user ? `${user.displayName ?? user.email}` : "Not signed in"}
       </div>
-      {visible && toast && (
+
+      {/* ── Floating alert toast ── */}
+      {visible && current && v && Icon && (
         <div
-          className="fixed bottom-6 right-6 z-[9999] flex max-w-xs items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-white px-4 py-3 text-sm font-medium text-emerald-800 shadow-[0_8px_32px_rgba(15,23,42,0.12)] backdrop-blur-md"
-          style={{ animation: "toast-in 0.35s ease-out" }}
-          role="status"
-          aria-live="polite"
+          role="alert"
+          aria-live="assertive"
+          className={`fixed bottom-6 right-6 z-[9999] flex w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border shadow-xl ${v.border} bg-white`}
+          style={{ animation: "toast-in 0.3s cubic-bezier(0.34,1.56,0.64,1)" }}
         >
-          <span className="size-2 shrink-0 rounded-full bg-emerald-400" />
-          <span className="flex-1">{toast}</span>
-          <button
-            className="ml-1 cursor-pointer border-none bg-transparent pl-1 text-xs text-slate-400 transition-colors hover:text-slate-600"
-            onClick={() => setVisible(false)}
-            aria-label="Dismiss notification"
-            type="button"
-          >
-            ✕
-          </button>
+          {/* Colored left bar */}
+          <div className={`w-1 shrink-0 ${v.bar}`} />
+
+          {/* Content */}
+          <div className="flex flex-1 items-start gap-3 px-4 py-3.5">
+            <Icon size={20} className={`mt-0.5 shrink-0 ${v.iconClass}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold leading-snug ${v.title}`}>
+                {current.type === "success" ? "Success" : current.type === "error" ? "Error" : "Warning"}
+              </p>
+              <p className={`text-sm mt-0.5 leading-snug ${v.msg}`}>{current.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setVisible(false)}
+              aria-label="Dismiss"
+              className="mt-0.5 shrink-0 rounded-md p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Auto-dismiss progress bar */}
+          <div
+            className={`absolute bottom-0 left-1 right-0 h-0.5 ${v.bar} opacity-30 origin-left`}
+            style={{ animation: "toast-progress 5s linear forwards" }}
+          />
         </div>
       )}
+
       <Outlet />
     </>
   );

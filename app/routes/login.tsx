@@ -29,6 +29,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  const { rateLimit, getClientIp } = await import("~/lib/ratelimit.server");
+  // 10 attempts per 15 minutes per IP
+  await rateLimit({ key: `login:${getClientIp(request)}`, limit: 10, windowSec: 900 });
+
   const { createUserSession, findUserByEmail, verifyPassword } = await import("~/lib/auth.server");
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim();

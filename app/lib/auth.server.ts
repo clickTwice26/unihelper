@@ -129,7 +129,7 @@ export async function createUserSession(userId: string, redirectTo: string, flas
 
   if (flashMessage) {
     const { serializeFlash } = await import("~/lib/flash.server");
-    headers.append("Set-Cookie", await serializeFlash(flashMessage));
+    headers.append("Set-Cookie", await serializeFlash({ type: "success", message: flashMessage }));
   }
 
   throw redirect(redirectTo, { headers });
@@ -194,7 +194,7 @@ export function isValidEmail(email: string) {
 export async function getUserById(id: string) {
   return db.user.findUnique({
     where: { id },
-    select: { id: true, email: true, displayName: true, passwordHash: true, createdAt: true },
+    select: { id: true, email: true, displayName: true, passwordHash: true, createdAt: true, isPublic: true, acceptRequests: true },
   });
 }
 
@@ -236,4 +236,15 @@ export async function updateUserPassword(
 
   const passwordHash = await hashPassword(input.newPassword);
   await db.user.update({ where: { id }, data: { passwordHash } });
+}
+
+export async function updateUserSettings(
+  id: string,
+  input: { isPublic: boolean; acceptRequests: boolean },
+) {
+  return db.user.update({
+    where: { id },
+    data: { isPublic: input.isPublic, acceptRequests: input.acceptRequests },
+    select: { id: true, isPublic: true, acceptRequests: true },
+  });
 }

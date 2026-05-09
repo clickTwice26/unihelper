@@ -7,13 +7,27 @@ const flashCookie = createCookie("unihelper_flash", {
   maxAge: 60,
 });
 
-export async function serializeFlash(message: string) {
-  return flashCookie.serialize(message);
+export type FlashMessage = {
+  type: "success" | "error" | "warning";
+  message: string;
+};
+
+export async function serializeFlash(flash: FlashMessage) {
+  return flashCookie.serialize(JSON.stringify(flash));
 }
 
-export async function parseFlash(request: Request): Promise<string | null> {
-  const value = await flashCookie.parse(request.headers.get("Cookie"));
-  return typeof value === "string" && value.length > 0 ? value : null;
+export async function parseFlash(request: Request): Promise<FlashMessage | null> {
+  const raw = await flashCookie.parse(request.headers.get("Cookie"));
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.type === "string" && typeof parsed.message === "string") {
+      return parsed as FlashMessage;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function clearFlash() {
