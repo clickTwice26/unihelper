@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Form, Link, NavLink, Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import {
   Search,
@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Bell,
   Globe,
+  Menu,
+  X,
 } from "lucide-react";
 
 import type { Route } from "./+types/dashboard-layout";
@@ -48,6 +50,7 @@ const footerItems = [
 export default function DashboardLayout() {
   const { user } = useLoaderData<typeof loader>();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { pathname } = useLocation();
 
   const pageTitle = (() => {
@@ -75,43 +78,87 @@ export default function DashboardLayout() {
       document.removeEventListener("click", onDocClick);
     };
   }, [avatarOpen]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileNavOpen]);
   
   // Use user's initials for the fallback avatar.
   const initials = (user.displayName ?? user.email).slice(0, 2).toUpperCase();
 
   // "Untitled UI" simple format widths.
-  const sidebarW = collapsed ? "5rem" : "17.5rem";
+  const desktopSidebarW = collapsed ? "5rem" : "17.5rem";
+  const sidebarStyle = { "--sidebar-w": desktopSidebarW } as CSSProperties;
 
   return (
-    <div className="dash-shell min-h-screen bg-slate-50 flex">
+    <div className="dash-shell min-h-screen bg-slate-50 lg:flex">
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
       {/* ── Sidebar ── */}
       <aside 
-        className="fixed inset-y-0 left-0 bg-white border-r border-slate-200 z-30 transition-all duration-300 ease-in-out flex flex-col"
-        style={{ width: sidebarW }}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[17.5rem] flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-in-out lg:w-[var(--sidebar-w)] lg:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        style={sidebarStyle}
       >
         {/* Brand Header */}
-        <div className={`flex items-center h-[4.5rem] shrink-0 transition-opacity px-4 ${collapsed ? "justify-center" : "justify-between px-5"}`}>
+        <div
+          className={`flex h-[4.5rem] shrink-0 items-center justify-between px-5 transition-opacity ${
+            collapsed ? "lg:justify-center lg:px-4" : ""
+          }`}
+        >
           <Link
             to="/"
             className="flex items-center gap-3 overflow-hidden min-w-0"
             aria-label="Untitled UI home"
+            onClick={() => setMobileNavOpen(false)}
           >
             <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-lg border border-slate-200 shadow-sm relative overflow-hidden bg-white">
               {/* Fake logo representation */}
               <div className="absolute inset-x-0 bottom-0 top-1/2 bg-slate-100" />
               <div className="relative z-10 w-3 h-3 bg-indigo-600 rounded-full" />
             </div>
-            {!collapsed && (
-              <span className="truncate font-semibold text-slate-900 text-[1.05rem]">
-                Untitled UI
-              </span>
-            )}
+            <span
+              className={`truncate font-semibold text-slate-900 text-[1.05rem] ${
+                collapsed ? "lg:hidden" : ""
+              }`}
+            >
+              Untitled UI
+            </span>
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 lg:hidden"
+            aria-label="Close sidebar"
+          >
+            <X size={18} />
+          </button>
+
           {!collapsed && (
             <button
               type="button"
               onClick={() => setCollapsed(true)}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+              className="hidden shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 lg:block"
               aria-label="Collapse sidebar"
             >
               <ChevronLeft size={18} />
@@ -121,7 +168,7 @@ export default function DashboardLayout() {
 
         {/* Search Input Mock */}
         <div className="px-4 mb-4 mt-2 shrink-0">
-           {!collapsed ? (
+            <div className={collapsed ? "lg:hidden" : ""}>
              <div className="relative group">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
@@ -133,8 +180,10 @@ export default function DashboardLayout() {
                   <span className="hidden group-hover:flex items-center justify-center border border-slate-200 rounded px-1.5 py-0.5 text-[0.65rem] font-medium text-slate-400 bg-slate-50">⌘K</span>
                 </div>
              </div>
-           ) : (
-             <div className="flex flex-col items-center gap-2">
+           </div>
+
+           {collapsed ? (
+             <div className="hidden lg:flex flex-col items-center gap-2">
                <button
                 type="button"
                 className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"
@@ -152,7 +201,7 @@ export default function DashboardLayout() {
                   <ChevronRight size={18} />
                </button>
              </div>
-           )}
+           ) : null}
         </div>
 
         {/* Primary Nav List */}
@@ -167,9 +216,10 @@ export default function DashboardLayout() {
                    isActive 
                      ? "bg-slate-100 text-slate-900" 
                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                 } ${collapsed ? "justify-center" : ""}`
+                 } ${collapsed ? "lg:justify-center" : ""}`
                }
                title={collapsed ? item.label : undefined}
+               onClick={() => setMobileNavOpen(false)}
              >
                 {({ isActive }) => (
                   <>
@@ -178,9 +228,9 @@ export default function DashboardLayout() {
                          size={20} 
                          className={`shrink-0 ${isActive ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"}`} 
                       />
-                      {!collapsed && <span className="truncate">{item.label}</span>}
+                      <span className={`truncate ${collapsed ? "lg:hidden" : ""}`}>{item.label}</span>
                     </div>
-                    {!collapsed && item.badge && (
+                    {item.badge && (
                       <span className="px-2.5 py-0.5 text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700 rounded-full">
                         {item.badge}
                       </span>
@@ -202,9 +252,10 @@ export default function DashboardLayout() {
                    isActive 
                      ? "bg-slate-100 text-slate-900" 
                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                 } ${collapsed ? "justify-center" : ""}`
+                 } ${collapsed ? "lg:justify-center" : ""}`
                }
                title={collapsed ? item.label : undefined}
+               onClick={() => setMobileNavOpen(false)}
              >
                 {({ isActive }) => (
                   <>
@@ -212,9 +263,9 @@ export default function DashboardLayout() {
                        size={20} 
                        className={`shrink-0 mr-3 ${isActive ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"} ${collapsed ? "mr-0" : ""}`} 
                     />
-                    {!collapsed && (
-                       <span className="truncate flex-1">{item.label}</span>
-                    )}
+                    <span className={`truncate flex-1 ${collapsed ? "lg:hidden" : ""}`}>
+                      {item.label}
+                    </span>
                   </>
                 )}
              </NavLink>
@@ -222,45 +273,41 @@ export default function DashboardLayout() {
         </div>
 
         {/* Feature Card Mock (Used Space) */}
-        {!collapsed && (
-          <div className="px-4 mb-6">
-            <div className="bg-slate-50 rounded-xl p-4 shadow-sm border border-slate-100 relative">
-               <div className="mb-3">
-                  <span className="flex items-baseline gap-1 text-[0.9rem] font-semibold text-slate-900">
-                    Used space
-                  </span>
-               </div>
-               <p className="text-[0.8rem] text-slate-500 mb-4 leading-tight">
-                 Your team has used 80% of your available space. Need more?
-               </p>
-               {/* Progress bar */}
-               <div className="w-full bg-slate-200 rounded-full h-2 mb-4 overflow-hidden">
-                 <div className="bg-indigo-600 h-2 rounded-full" style={{ width: '80%' }}></div>
-               </div>
-               <button className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg py-2 shadow-sm hover:bg-slate-50 transition-colors">
-                  Upgrade plan
-               </button>
-            </div>
+        <div className={collapsed ? "lg:hidden px-4 mb-6" : "px-4 mb-6"}>
+          <div className="bg-slate-50 rounded-xl p-4 shadow-sm border border-slate-100 relative">
+             <div className="mb-3">
+                <span className="flex items-baseline gap-1 text-[0.9rem] font-semibold text-slate-900">
+                  Used space
+                </span>
+             </div>
+             <p className="text-[0.8rem] text-slate-500 mb-4 leading-tight">
+               Your team has used 80% of your available space. Need more?
+             </p>
+             {/* Progress bar */}
+             <div className="w-full bg-slate-200 rounded-full h-2 mb-4 overflow-hidden">
+               <div className="bg-indigo-600 h-2 rounded-full" style={{ width: '80%' }}></div>
+             </div>
+             <button className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg py-2 shadow-sm hover:bg-slate-50 transition-colors">
+                Upgrade plan
+             </button>
           </div>
-        )}
+        </div>
 
         {/* User Card Row */}
-        <div className={`border-t border-slate-200 p-4 flex items-center gap-3 shrink-0 ${collapsed ? "justify-center" : "justify-between"}`}>
+        <div className={`border-t border-slate-200 p-4 flex items-center gap-3 shrink-0 justify-between ${collapsed ? "lg:justify-center" : ""}`}>
            <div className="flex items-center gap-3 min-w-0">
              <div className="h-10 w-10 shrink-0 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-700 shadow-sm overflow-hidden">
                 {/* Random avatar image to match Untitled UI vibe if real avatar is absent, here we use initials */}
                 {initials}
              </div>
-             {!collapsed && (
-               <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <p className="text-[0.9rem] font-semibold text-slate-900 truncate leading-tight">
-                    {user.displayName ?? "Olivia Rhye"}
-                  </p>
-                  <p className="text-[0.8rem] text-slate-500 truncate leading-tight mt-0.5">
-                    {user.email}
-                  </p>
-               </div>
-             )}
+             <div className={`flex-1 min-w-0 flex flex-col justify-center ${collapsed ? "lg:hidden" : ""}`}>
+                <p className="text-[0.9rem] font-semibold text-slate-900 truncate leading-tight">
+                  {user.displayName ?? "Olivia Rhye"}
+                </p>
+                <p className="text-[0.8rem] text-slate-500 truncate leading-tight mt-0.5">
+                  {user.email}
+                </p>
+             </div>
            </div>
 
         </div>
@@ -268,15 +315,23 @@ export default function DashboardLayout() {
 
       {/* ── Main content area ── */}
       <div 
-        className="flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out" 
-        style={{ marginLeft: sidebarW }}
+        className="flex min-h-screen flex-1 flex-col transition-all duration-300 ease-in-out lg:ml-[var(--sidebar-w)]" 
+        style={sidebarStyle}
       >
-        <header className="sticky top-0 h-[4.5rem] bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0" style={{ zIndex: 20 }}>
+        <header className="sticky top-0 z-20 flex h-[4.5rem] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-             <span className="text-[1.1rem] font-semibold text-slate-800 tracking-tight">{pageTitle}</span>
+             <button
+               type="button"
+               onClick={() => setMobileNavOpen(true)}
+               className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+               aria-label="Open sidebar"
+             >
+               <Menu size={20} />
+             </button>
+             <span className="text-[1rem] font-semibold text-slate-800 tracking-tight sm:text-[1.1rem]">{pageTitle}</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <button className="text-slate-500 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-md transition-colors" aria-label="Notifications">
               <Bell size={20} />
             </button>
@@ -318,7 +373,7 @@ export default function DashboardLayout() {
                       onClick={() => setAvatarOpen(false)}
                       className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      View profile
+                       View profile
                     </Link>
                   </div>
 
@@ -340,7 +395,7 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

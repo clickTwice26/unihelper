@@ -55,15 +55,6 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="space-y-1">
-        <p className="eyebrow">Overview</p>
-        <h1 className="type-heading-lg text-slate-900">Welcome to your workspace</h1>
-        <p className="type-body-md max-w-xl text-slate-500">
-          Your infrastructure is running. Start building features, not scaffolding.
-        </p>
-      </div>
-
       {/* Stats grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats(userCount, activeSessionCount).map((stat) => (

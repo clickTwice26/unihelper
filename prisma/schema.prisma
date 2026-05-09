@@ -7,16 +7,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum BuddyRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+}
+
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  displayName  String?
-  passwordHash String
-  isPublic     Boolean   @default(false)
+  id                  String         @id @default(cuid())
+  email               String         @unique
+  displayName         String?
+  passwordHash        String
+  isPublic            Boolean        @default(false)
   acceptRequests Boolean @default(true)
-  sessions     Session[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  sessions            Session[]
+  sentBuddyRequests   BuddyRequest[] @relation("BuddyRequestSender")
+  receivedBuddyRequests BuddyRequest[] @relation("BuddyRequestReceiver")
+  buddyConnectionsA   BuddyConnection[] @relation("BuddyConnectionA")
+  buddyConnectionsB   BuddyConnection[] @relation("BuddyConnectionB")
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 }
 
 model Session {
@@ -29,4 +40,34 @@ model Session {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model BuddyRequest {
+  id         String             @id @default(cuid())
+  pairKey    String             @unique
+  senderId   String
+  receiverId String
+  status     BuddyRequestStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  sender     User               @relation("BuddyRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User               @relation("BuddyRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, status])
+  @@index([receiverId, status])
+  @@index([createdAt])
+}
+
+model BuddyConnection {
+  id        String   @id @default(cuid())
+  pairKey   String   @unique
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  userA     User     @relation("BuddyConnectionA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("BuddyConnectionB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@index([userAId, createdAt])
+  @@index([userBId, createdAt])
 }

@@ -297,3 +297,22 @@ body {
   to   { transform: scaleX(0); }
 }
 
+.social-tab-label {
+  display: inline;
+}
+
+.social-tab-count {
+  display: inline-flex;
+}
+
+@media (max-width: 639px) {
+  .social-tab-link {
+    gap: 0;
+  }
+
+  .social-tab-label,
+  .social-tab-count {
+    display: none;
+  }
+}
+

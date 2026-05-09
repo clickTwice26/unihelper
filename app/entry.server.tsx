@@ -61,6 +61,13 @@ export default function handleRequest(
 
           responseHeaders.set("Content-Type", "text/html");
 
+          // Avoid stale HTML while iterating locally. Vite already handles
+          // asset invalidation, but disabling document caching in development
+          // prevents confusing refresh-to-refresh mismatches.
+          if (process.env.NODE_ENV !== "production") {
+            responseHeaders.set("Cache-Control", "no-store");
+          }
+
           // ── Security headers ────────────────────────────────────────────
           // Enforce HTTPS in production (1 year, include subdomains)
           if (process.env.NODE_ENV === "production") {
@@ -85,12 +92,16 @@ export default function handleRequest(
             "Content-Security-Policy",
             [
               "default-src 'self'",
-              "script-src 'self'",
+              // React Router emits inline hydration/runtime scripts. Without a
+              // nonce-based CSP, allowing inline scripts here is required for
+              // the app to hydrate and client-side interactions to work.
+              "script-src 'self' 'unsafe-inline'",
               // Tailwind inlines style attributes; Google Fonts needs style-src
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data:",
-              "connect-src 'self'",
+              "connect-src 'self' ws: wss:",
+              "worker-src 'self' blob:",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
