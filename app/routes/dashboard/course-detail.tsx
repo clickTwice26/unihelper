@@ -71,10 +71,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   let storageFiles: { id: string; name: string; path: string; isFolder: boolean; size: number; mimeType: string | null; key: string; createdAt: Date; courseId: string }[] = [];
   let storageUsageBytes = 0;
   let storagePath = "/";
-  let quizzes: { id: string; title: string; syllabus: string; quizDate: Date; deadline: Date | null; createdAt: Date }[] = [];
+  let quizzes: { id: string; serial: number; title: string; syllabus: string; quizDate: Date; deadline: Date | null; createdAt: Date }[] = [];
   let assignments: { id: string; title: string; description: string; deadline: Date; createdAt: Date }[] = [];
   let midExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
   let finalExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
+  let customLinks: { id: string; label: string; url: string; createdAt: Date }[] = [];
 
   if (activeTab === "storage") {
     const { listCourseFiles, getCourseStorageUsage, sanitizeStoragePath } =
@@ -91,8 +92,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     const { db } = await import("~/lib/db.server");
     quizzes = await db.quiz.findMany({
       where: { courseId },
-      orderBy: { quizDate: "asc" },
-      select: { id: true, title: true, syllabus: true, quizDate: true, deadline: true, createdAt: true },
+      orderBy: [{ serial: "asc" }, { createdAt: "asc" }],
+      select: { id: true, serial: true, title: true, syllabus: true, quizDate: true, deadline: true, createdAt: true },
     });
   }
 
@@ -121,8 +122,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     });
   }
 
+  if (activeTab === "links") {
+    const { db } = await import("~/lib/db.server");
+    customLinks = await db.courseLink.findMany({
+      where: { courseId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, label: true, url: true, createdAt: true },
+    });
+  }
+
   const r2PublicUrl = (await import("~/lib/env.server")).env.R2_PUBLIC_URL.replace(/\/$/, "");
-  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam };
+  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -161,6 +171,32 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (err instanceof Response && err.status === 429)
       throw await flash("error", "Too many requests. Please wait and try again.");
     throw err;
+  }
+
+  // ── Custom Link: create ──────────────────────────────────────────────────
+  if (intent === "create-link") {
+    const { db } = await import("~/lib/db.server");
+    const label = String(formData.get("label") ?? "").trim().slice(0, 100);
+    const url = String(formData.get("url") ?? "").trim().slice(0, 500);
+    if (!label) throw await flash("error", "Link label is required.");
+    if (!url) throw await flash("error", "URL is required.");
+    if (!url.startsWith("http://") && !url.startsWith("https://"))
+      throw await flash("error", "URL must start with http:// or https://");
+    const count = await db.courseLink.count({ where: { courseId } });
+    if (count >= 20) throw await flash("error", "Maximum of 20 links per course.");
+    await db.courseLink.create({ data: { courseId, label, url } });
+    throw await flash("success", `Link \u201c${label}\u201d added.`);
+  }
+
+  // ── Custom Link: delete ──────────────────────────────────────────────────
+  if (intent === "delete-link") {
+    const { db } = await import("~/lib/db.server");
+    const linkId = String(formData.get("linkId") ?? "").trim();
+    if (!linkId) throw await flash("error", "Missing link ID.");
+    const link = await db.courseLink.findUnique({ where: { id: linkId }, select: { courseId: true } });
+    if (!link || link.courseId !== courseId) throw await flash("error", "Link not found.");
+    await db.courseLink.delete({ where: { id: linkId } });
+    throw await flash("success", "Link removed.");
   }
 
   // ── Storage: create folder ──────────────────────────────────────────────
@@ -245,13 +281,35 @@ export async function action({ request, params }: Route.ActionArgs) {
     const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
     if (deadline && isNaN(deadline.getTime())) throw await flash("error", "Invalid deadline.");
 
-    const existing = await db.quiz.count({ where: { courseId } });
-    if (existing >= 4) throw await flash("error", "Maximum of 4 quizzes per course reached.");
+    const allQuizzes = await db.quiz.findMany({ where: { courseId }, select: { serial: true } });
+    if (allQuizzes.length >= 4) throw await flash("error", "Maximum of 4 quizzes per course reached.");
+    const usedSerials = new Set(allQuizzes.map((q) => q.serial));
+    let nextSerial = 1;
+    while (usedSerials.has(nextSerial)) nextSerial++;
 
     await db.quiz.create({
-      data: { courseId, title, syllabus, quizDate, deadline },
+      data: { courseId, title, syllabus, quizDate, deadline, serial: nextSerial },
     });
     throw await flash("success", `Quiz "${title}" logged.`);
+  }
+
+  // ── Quiz: reorder ──────────────────────────────────────────────────────
+  if (intent === "reorder-quiz") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    const newSerial = parseInt(String(formData.get("newSerial") ?? ""), 10);
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    if (isNaN(newSerial) || newSerial < 1 || newSerial > 4) throw await flash("error", "Invalid serial number.");
+    const quizToMove = await db.quiz.findUnique({ where: { id: quizId }, select: { serial: true, courseId: true } });
+    if (!quizToMove || quizToMove.courseId !== courseId) throw await flash("error", "Quiz not found.");
+    const otherQuiz = await db.quiz.findFirst({ where: { courseId, serial: newSerial, id: { not: quizId } } });
+    await db.$transaction(async (tx) => {
+      if (otherQuiz) {
+        await tx.quiz.update({ where: { id: otherQuiz.id }, data: { serial: quizToMove.serial } });
+      }
+      await tx.quiz.update({ where: { id: quizId }, data: { serial: newSerial } });
+    });
+    throw await flash("success", `Quiz moved to #${newSerial}.`);
   }
 
   // ── Quiz: delete ───────────────────────────────────────────────────────
@@ -670,6 +728,7 @@ type StorageFile = {
 
 type QuizEntry = {
   id: string;
+  serial: number;
   title: string;
   syllabus: string;
   quizDate: Date | string;
@@ -682,6 +741,13 @@ type AssignmentEntry = {
   title: string;
   description: string;
   deadline: Date | string;
+  createdAt: Date | string;
+};
+
+type CourseLinkEntry = {
+  id: string;
+  label: string;
+  url: string;
   createdAt: Date | string;
 };
 
@@ -803,6 +869,195 @@ function FilePreviewModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Links Tab ───────────────────────────────────────────────────────────────
+
+function LinksTab({
+  courseId,
+  blcLink,
+  groupLink,
+  customLinks,
+  navigation,
+  isOwner,
+}: {
+  courseId: string;
+  blcLink: string | null;
+  groupLink: string | null;
+  customLinks: CourseLinkEntry[];
+  navigation: ReturnType<typeof useNavigation>;
+  isOwner: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const isSubmitting = navigation.state === "submitting";
+  const intent = String(navigation.formData?.get("intent") ?? "");
+  const backHref = `/dashboard/courses/${courseId}?tab=links`;
+
+  const hasAnything = blcLink || groupLink || customLinks.length > 0;
+
+  return (
+    <div className="px-6 py-6 space-y-5">
+      {/* Fixed links: BLC + Group */}
+      {(blcLink || groupLink) ? (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Course Links</p>
+          <div className="flex flex-wrap gap-3">
+            {blcLink ? (
+              <a
+                href={blcLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                <ExternalLink size={15} />
+                BLC Link
+              </a>
+            ) : null}
+            {groupLink ? (
+              <a
+                href={groupLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+              >
+                <MessageCircle size={15} />
+                Group Link
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Custom links header */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Custom Links{customLinks.length > 0 ? ` (${customLinks.length})` : ""}
+        </p>
+        {isOwner && !showForm ? (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+          >
+            <Plus size={15} />
+            Add Link
+          </button>
+        ) : null}
+      </div>
+
+      {/* Add link form */}
+      {showForm && isOwner ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <p className="mb-4 text-sm font-semibold text-slate-800">Add a New Link</p>
+          <Form method="post" preventScrollReset className="space-y-3">
+            <input type="hidden" name="intent" value="create-link" />
+            <input type="hidden" name="backHref" value={backHref} />
+            <div>
+              <label className={labelCls}>Label</label>
+              <input
+                type="text"
+                name="label"
+                required
+                maxLength={100}
+                placeholder="e.g. Lecture Slides, Reference Book…"
+                className={inputCls}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className={labelCls}>URL</label>
+              <input
+                type="url"
+                name="url"
+                required
+                maxLength={500}
+                placeholder="https://…"
+                className={inputCls}
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={isSubmitting && intent === "create-link"}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {isSubmitting && intent === "create-link" ? "Saving…" : "Save Link"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </Form>
+        </div>
+      ) : null}
+
+      {/* Custom links list */}
+      {customLinks.length === 0 && !showForm ? (
+        !hasAnything ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <Link2 size={22} />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-700">No links yet</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {isOwner ? 'Click "Add Link" to save a URL with a label.' : "No links have been added to this course yet."}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">No custom links added yet.</p>
+        )
+      ) : (
+        <div className="flex flex-col gap-2">
+          {customLinks.map((link) => {
+            const isDeleting = isSubmitting && intent === "delete-link" && String(navigation.formData?.get("linkId")) === link.id;
+            return (
+              <div key={link.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-sm font-semibold text-indigo-700 transition hover:text-indigo-900"
+                >
+                  <ExternalLink size={14} className="shrink-0 text-slate-400" />
+                  <span className="truncate">{link.label}</span>
+                </a>
+                {isOwner ? (
+                  deleteConfirmId === link.id ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="text-xs text-slate-500">Remove?</span>
+                      <button type="button" onClick={() => setDeleteConfirmId(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">No</button>
+                      <Form method="post" preventScrollReset>
+                        <input type="hidden" name="intent" value="delete-link" />
+                        <input type="hidden" name="linkId" value={link.id} />
+                        <input type="hidden" name="backHref" value={backHref} />
+                        <button type="submit" disabled={isDeleting} className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60">
+                          {isDeleting ? "…" : "Yes"}
+                        </button>
+                      </Form>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmId(link.id)}
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                      title="Remove link"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -934,7 +1189,22 @@ function QuizTab({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700">Quiz #{idx + 1}</span>
+                      <Form method="post" preventScrollReset>
+                        <input type="hidden" name="intent" value="reorder-quiz" />
+                        <input type="hidden" name="quizId" value={quiz.id} />
+                        <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
+                        <select
+                          name="newSerial"
+                          defaultValue={quiz.serial || idx + 1}
+                          onChange={(e) => e.currentTarget.form?.submit()}
+                          className="shrink-0 cursor-pointer rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700 outline-none transition hover:bg-indigo-200 focus:ring-2 focus:ring-indigo-400"
+                          title="Change quiz number"
+                        >
+                          {Array.from({ length: quizzes.length }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>#{i + 1}</option>
+                          ))}
+                        </select>
+                      </Form>
                       <p className="truncate text-sm font-bold text-slate-800">{quiz.title}</p>
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -1691,12 +1961,13 @@ function InfoRow({
 }
 
 export default function CourseDetailPage() {
-  const { course, backHref, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam } =
+  const { course, backHref, viewerId, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const isOwner = viewerId === course.ownerId;
 
   type Tab = "information" | "links" | "storage" | "quiz" | "assignment" | "mid" | "final";
   const rawTab = searchParams.get("tab") ?? "information";
@@ -1876,44 +2147,14 @@ export default function CourseDetailPage() {
 
         {/* Tab: Links */}
         {activeTab === "links" ? (
-          <div className="px-6 py-6">
-            {course.blcLink || course.groupLink ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {course.blcLink ? (
-                  <a
-                    href={course.blcLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-                  >
-                    <ExternalLink size={16} />
-                    BLC Link
-                  </a>
-                ) : null}
-                {course.groupLink ? (
-                  <a
-                    href={course.groupLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
-                  >
-                    <MessageCircle size={16} />
-                    Group Link
-                  </a>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-                  <Link2 size={22} />
-                </div>
-                <p className="mt-3 text-sm font-semibold text-slate-700">No links added</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Edit this course to add a BLC link or communication group link.
-                </p>
-              </div>
-            )}
-          </div>
+          <LinksTab
+            courseId={course.id}
+            blcLink={course.blcLink ?? null}
+            groupLink={course.groupLink ?? null}
+            customLinks={customLinks as CourseLinkEntry[]}
+            navigation={navigation}
+            isOwner={isOwner}
+          />
         ) : null}
 
         {/* Tab: Storage */}

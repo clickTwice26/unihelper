@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Bell,
   BookOpen,
+  CalendarDays,
   Globe,
   Menu,
   X,
@@ -38,6 +39,7 @@ const navItemsSimple = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard, end: true },
   { label: "Social", to: "/dashboard/social", icon: Globe, end: false },
   { label: "Courses", to: "/dashboard/courses", icon: BookOpen, end: false },
+  { label: "Calendar", to: "/dashboard/calendar", icon: CalendarDays, end: false },
   { label: "Projects", to: "/projects", icon: Layers, end: false },
   { label: "Tasks", to: "/tasks", icon: CheckSquare, badge: 10, end: false },
   { label: "Reporting", to: "/reporting", icon: PieChart, end: false },
@@ -60,6 +62,7 @@ export default function DashboardLayout() {
     if (pathname.startsWith("/dashboard/profile")) return "Profile";
     if (pathname.startsWith("/dashboard/social")) return "Social";
     if (pathname.startsWith("/dashboard/courses")) return "Courses";
+    if (pathname.startsWith("/dashboard/calendar")) return "Calendar";
     const segment = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   })();

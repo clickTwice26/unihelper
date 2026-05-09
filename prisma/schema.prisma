@@ -86,6 +86,7 @@ model Course {
   ownerId      String
   owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   files        CourseFile[]
+  links        CourseLink[]
   quizzes      Quiz[]
   assignments  Assignment[]
   midExam      MidExam?
@@ -94,6 +95,17 @@ model Course {
   updatedAt    DateTime     @updatedAt
 
   @@index([ownerId, createdAt])
+}
+
+model CourseLink {
+  id        String   @id @default(cuid())
+  courseId  String
+  label     String
+  url       String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([courseId, createdAt])
 }
 
 model CourseFile {
@@ -115,6 +127,7 @@ model CourseFile {
 model Quiz {
   id        String    @id @default(cuid())
   courseId  String
+  serial    Int       @default(0)
   title     String
   syllabus  String    @db.Text
   quizDate  DateTime
@@ -123,7 +136,7 @@ model Quiz {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@index([courseId, quizDate])
+  @@index([courseId, serial])
 }
 
 model Assignment {
