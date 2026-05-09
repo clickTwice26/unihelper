@@ -173,33 +173,70 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
+  const is404 = isRouteErrorResponse(error) && error.status === 404;
+
+  if (is404) {
+    return (
+      <Layout>
+        <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-6 py-16 text-center">
+          {/* Big number */}
+          <p className="select-none text-[9rem] font-black leading-none text-indigo-100 sm:text-[13rem] drop-shadow-sm">
+            404
+          </p>
+
+          <div className="-mt-4 space-y-3">
+            <h1 className="text-3xl font-bold text-slate-900 sm:text-4xl tracking-tight">
+              Page not found
+            </h1>
+            <p className="mx-auto max-w-sm text-base text-slate-500 leading-relaxed">
+              The page you're looking for doesn't exist or has been moved.
+            </p>
+          </div>
+
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              Go to Dashboard
+            </a>
+            <a
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              Back to Home
+            </a>
+          </div>
+        </main>
+      </Layout>
+    );
+  }
+
+  // ── Generic error ────────────────────────────────────────────────────────
   let details = "An unexpected error occurred.";
   let stack: string | undefined;
 
   if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
-    details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
-  } else if (import.meta.env.DEV && error && error instanceof Error) {
+    details = error.statusText || details;
+  } else if (import.meta.env.DEV && error instanceof Error) {
     details = error.message;
     stack = error.stack;
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-16">
-      <section className="surface-panel w-full space-y-4 p-8">
-        <p className="eyebrow">Application Error</p>
-        <h1 className="type-heading-lg">{message}</h1>
-        <p className="type-body-md max-w-2xl text-slate-600">{details}</p>
-        {stack && (
-          <pre className="type-body-sm max-h-96 w-full overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
-            <code>{stack}</code>
-          </pre>
-        )}
-      </section>
-    </main>
+    <Layout>
+      <main className="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-16">
+        <section className="surface-panel w-full space-y-4 p-8">
+          <p className="eyebrow">Something went wrong</p>
+          <h1 className="type-heading-lg">Unexpected Error</h1>
+          <p className="type-body-md max-w-2xl text-slate-600">{details}</p>
+          {stack && (
+            <pre className="type-body-sm max-h-96 w-full overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
+              <code>{stack}</code>
+            </pre>
+          )}
+        </section>
+      </main>
+    </Layout>
   );
 }

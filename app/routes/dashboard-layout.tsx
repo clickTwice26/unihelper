@@ -14,9 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
-  Menu,
-  Activity,
-  UserPlus
+  Globe,
 } from "lucide-react";
 
 import type { Route } from "./+types/dashboard-layout";
@@ -35,6 +33,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 const navItemsSimple = [
   { label: "Home", to: "/dashboard/home", icon: Home, end: true },
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard, end: true },
+  { label: "Social", to: "/dashboard/social", icon: Globe, end: false },
   { label: "Projects", to: "/projects", icon: Layers, end: false },
   { label: "Tasks", to: "/tasks", icon: CheckSquare, badge: 10, end: false },
   { label: "Reporting", to: "/reporting", icon: PieChart, end: false },
@@ -54,21 +53,28 @@ export default function DashboardLayout() {
   const pageTitle = (() => {
     if (pathname === "/dashboard" || pathname === "/dashboard/home") return "Dashboard";
     if (pathname.startsWith("/dashboard/profile")) return "Profile";
+    if (pathname.startsWith("/dashboard/social")) return "Social";
     const segment = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   })();
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const avatarRef = useRef<HTMLDivElement>(null);
+  const avatarWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+    if (!avatarOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (avatarWrapRef.current && !avatarWrapRef.current.contains(e.target as Node)) {
         setAvatarOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    // setTimeout(0): skip the current click that opened the dropdown
+    // before registering the outside-click listener
+    const id = window.setTimeout(() => document.addEventListener("click", onDocClick), 0);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("click", onDocClick);
+    };
+  }, [avatarOpen]);
   
   // Use user's initials for the fallback avatar.
   const initials = (user.displayName ?? user.email).slice(0, 2).toUpperCase();
@@ -265,7 +271,7 @@ export default function DashboardLayout() {
         className="flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out" 
         style={{ marginLeft: sidebarW }}
       >
-        <header className="sticky top-0 z-20 h-[4.5rem] bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+        <header className="sticky top-0 h-[4.5rem] bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0" style={{ zIndex: 20 }}>
           <div className="flex items-center gap-3">
              <span className="text-[1.1rem] font-semibold text-slate-800 tracking-tight">{pageTitle}</span>
           </div>
@@ -274,38 +280,60 @@ export default function DashboardLayout() {
             <button className="text-slate-500 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-md transition-colors" aria-label="Notifications">
               <Bell size={20} />
             </button>
-            <div className="relative" ref={avatarRef}>
+            <div className="relative" ref={avatarWrapRef}>
+              {/* Avatar trigger button */}
               <button
                 type="button"
                 onClick={() => setAvatarOpen((o) => !o)}
-                className="h-8 w-8 shrink-0 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-700 shadow-sm hover:ring-2 hover:ring-indigo-300 transition-all"
-                aria-label="User menu"
+                className="h-9 w-9 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white ring-2 ring-white hover:ring-indigo-200 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                aria-label="Open user menu"
+                aria-haspopup="true"
                 aria-expanded={avatarOpen}
               >
                 {initials}
               </button>
+
+              {/* Dropdown panel */}
               {avatarOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
-                  <div className="px-4 py-3 border-b border-slate-100">
-                    <p className="text-[0.875rem] font-semibold text-slate-900 truncate">{user.displayName ?? user.email}</p>
-                    <p className="text-[0.78rem] text-slate-500 truncate mt-0.5">{user.email}</p>
+                <div className="absolute right-0 top-[calc(100%+0.5rem)] w-64 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden" style={{ zIndex: 9999 }}>
+                  {/* User info header */}
+                  <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100">
+                    <div className="h-9 w-9 shrink-0 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {user.displayName ?? user.email}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate mt-0.5">
+                        {user.email}
+                      </p>
+                    </div>
                   </div>
-                  <Link
-                    to="/dashboard/profile"
-                    onClick={() => setAvatarOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-[0.875rem] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    View profile
-                  </Link>
-                  <Form action="/logout" method="post">
-                    <button
-                      type="submit"
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.875rem] font-medium text-red-600 hover:bg-red-50 transition-colors"
+
+                  {/* Menu items */}
+                  <div className="py-1">
+                    <Link
+                      to="/dashboard/profile"
+                      onClick={() => setAvatarOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      <LogOut size={16} />
-                      Sign out
-                    </button>
-                  </Form>
+                      View profile
+                    </Link>
+                  </div>
+
+                  {/* Sign out */}
+                  <div className="border-t border-slate-100 p-2">
+                    <Form action="/logout" method="post">
+                      <button
+                        type="submit"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        <LogOut size={15} className="text-slate-400" />
+                        Sign out
+                      </button>
+                    </Form>
+                  </div>
                 </div>
               )}
             </div>
