@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
 enum BuddyRequestStatus {
   PENDING
   ACCEPTED
@@ -27,8 +33,26 @@ model User {
   buddyConnectionsA   BuddyConnection[] @relation("BuddyConnectionA")
   buddyConnectionsB   BuddyConnection[] @relation("BuddyConnectionB")
   courses             Course[]
+  classRoutines       ClassRoutine[]
+  tasks               Task[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
+}
+
+model ClassRoutine {
+  id         String   @id @default(cuid())
+  userId     String
+  dayOfWeek  Int      // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+  courseName String
+  room       String?
+  startTime  String   // "HH:MM" 24h
+  endTime    String   // "HH:MM" 24h
+  color      String   @default("indigo")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, dayOfWeek])
 }
 
 model Session {
@@ -174,4 +198,20 @@ model FinalExam {
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id        String     @id @default(cuid())
+  userId    String
+  title     String
+  notes     String?    @db.Text
+  deadline  DateTime?
+  status    TaskStatus @default(TODO)
+  assignees String[]
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, deadline])
 }

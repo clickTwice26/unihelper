@@ -13,6 +13,8 @@ export default [
     route("dashboard/courses/:courseId", "routes/dashboard/course-detail.tsx"),
     route("dashboard/courses/:courseId/files/:fileId", "routes/dashboard/course-file.tsx"),
     route("dashboard/calendar", "routes/dashboard/calendar.tsx"),
+    route("dashboard/routine", "routes/dashboard/routine.tsx"),
+    route("dashboard/tasks", "routes/dashboard/tasks.tsx"),
   ]),
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),
