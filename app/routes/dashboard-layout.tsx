@@ -4,12 +4,7 @@ import {
   Search,
   LayoutDashboard,
   LayoutGrid,
-  Layers,
   CheckSquare,
-  PieChart,
-  Users,
-  Settings,
-  HelpCircle,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -46,16 +41,14 @@ const navItemsSimple: Array<{
   { label: "Courses", to: "/dashboard/courses", icon: BookOpen, end: false },
   { label: "Calendar", to: "/dashboard/calendar", icon: CalendarDays, end: false },
   { label: "Routine", to: "/dashboard/routine", icon: LayoutGrid, end: false },
-  { label: "Projects", to: "/projects", icon: Layers, end: false },
   { label: "Tasks", to: "/dashboard/tasks", icon: CheckSquare, end: false },
-  { label: "Reporting", to: "/reporting", icon: PieChart, end: false },
-  { label: "Users", to: "/users", icon: Users, end: false },
 ];
 
-const footerItems = [
-  { label: "Support", to: "/support", icon: HelpCircle },
-  { label: "Settings", to: "/settings", icon: Settings },
-];
+const footerItems: Array<{
+  label: string;
+  to: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+}> = [];
 
 export default function DashboardLayout() {
   const { user } = useLoaderData<typeof loader>();
