@@ -54,11 +54,24 @@ function rateLimitResponse(retryAfterSec: number): Response {
   });
 }
 
-/** Extract the best-effort client IP from the request headers. */
+/**
+ * Extract the best-effort client IP from the request headers.
+ *
+ * SECURITY: `x-forwarded-for` is set by proxies and can be spoofed by
+ * clients unless you control every hop.  We read only the *last* entry in
+ * the XFF chain (added by the edge/proxy closest to the server) rather than
+ * the first (which a client can inject).  When running behind a trusted
+ * reverse proxy (Nginx, Cloudflare, etc.) the last entry is reliable.
+ * In development with no proxy the header is absent and we fall back to
+ * "unknown".
+ */
 export function getClientIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  );
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    // Take the LAST IP — the one appended by the actual trusted proxy
+    const ips = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    const last = ips[ips.length - 1];
+    if (last) return last;
+  }
+  return request.headers.get("x-real-ip") ?? "unknown";
 }

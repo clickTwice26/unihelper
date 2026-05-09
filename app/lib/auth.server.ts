@@ -183,8 +183,9 @@ export async function registerUser(input: {
   });
 }
 
+/** Minimum 8, maximum 128 chars — prevents scrypt DoS via oversized inputs */
 export function isValidPassword(password: string) {
-  return password.length >= 8;
+  return password.length >= 8 && password.length <= 128;
 }
 
 export function isValidEmail(email: string) {
@@ -196,6 +197,10 @@ export async function getUserById(id: string) {
     where: { id },
     select: { id: true, email: true, displayName: true, passwordHash: true, createdAt: true, isPublic: true, acceptRequests: true },
   });
+}
+
+export function isValidDisplayName(name: string) {
+  return name.length <= 100;
 }
 
 export async function updateUserProfile(

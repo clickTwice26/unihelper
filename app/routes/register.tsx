@@ -34,7 +34,7 @@ export async function action({ request }: Route.ActionArgs) {
   // 5 registrations per hour per IP
   await rateLimit({ key: `register:${getClientIp(request)}`, limit: 5, windowSec: 3600 });
 
-  const { createUserSession, findUserByEmail, isValidEmail, isValidPassword, registerUser } = await import("~/lib/auth.server");
+  const { createUserSession, findUserByEmail, isValidEmail, isValidPassword, isValidDisplayName, registerUser } = await import("~/lib/auth.server");
   const formData = await request.formData();
   const fullName = String(formData.get("fullName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
@@ -46,6 +46,14 @@ export async function action({ request }: Route.ActionArgs) {
       status: "error" as const,
       fields: { email, fullName },
       message: "All fields are required to create an account.",
+    } satisfies ActionData;
+  }
+
+  if (!isValidDisplayName(fullName)) {
+    return {
+      status: "error" as const,
+      fields: { email, fullName },
+      message: "Full name must be 100 characters or fewer.",
     } satisfies ActionData;
   }
 
@@ -61,7 +69,7 @@ export async function action({ request }: Route.ActionArgs) {
     return {
       status: "error" as const,
       fields: { email, fullName },
-      message: "Password must be at least 8 characters long.",
+      message: "Password must be between 8 and 128 characters.",
     } satisfies ActionData;
   }
 

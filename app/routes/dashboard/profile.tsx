@@ -80,6 +80,7 @@ export async function action({ request }: Route.ActionArgs) {
 
     if (!email) throw await flash("error", "Email is required.");
     if (!isValidEmail(email)) throw await flash("error", "Enter a valid email address.");
+    if (displayName && displayName.length > 100) throw await flash("error", "Display name must be 100 characters or fewer.");
 
     try {
       await updateUserProfile(session.id, { displayName, email });
@@ -104,7 +105,7 @@ export async function action({ request }: Route.ActionArgs) {
       throw await flash("warning", "All password fields are required.");
     }
     if (!isValidPassword(newPassword)) {
-      throw await flash("warning", "New password must be at least 8 characters.");
+      throw await flash("warning", "New password must be between 8 and 128 characters.");
     }
     if (newPassword !== confirmPassword) {
       throw await flash("warning", "New passwords do not match.");

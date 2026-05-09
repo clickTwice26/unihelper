@@ -37,7 +37,13 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
-  const redirectTo = String(formData.get("redirectTo") ?? "/dashboard").trim() || "/dashboard";
+
+  // Validate redirectTo is a relative path to prevent open-redirect attacks
+  const rawRedirect = String(formData.get("redirectTo") ?? "").trim();
+  const redirectTo =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+      ? rawRedirect
+      : "/dashboard";
 
   if (!email || !password) {
     return {

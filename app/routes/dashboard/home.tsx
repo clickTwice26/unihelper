@@ -7,7 +7,12 @@ export function meta() {
   return [{ title: "Dashboard | Unihelper" }];
 }
 
-export async function loader(_: Route.LoaderArgs) {
+export async function loader({ request }: Route.LoaderArgs) {
+  const { getAuthenticatedUser } = await import("~/lib/auth.server");
+  const { redirect } = await import("react-router");
+  const user = await getAuthenticatedUser(request);
+  if (!user) throw redirect("/login");
+
   const now = new Date();
 
   const [userCount, activeSessionCount] = await Promise.all([

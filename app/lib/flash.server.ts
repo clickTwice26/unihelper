@@ -1,10 +1,14 @@
 import { createCookie } from "react-router";
 
+import { env } from "~/lib/env.server";
+
 const flashCookie = createCookie("unihelper_flash", {
   httpOnly: true,
   sameSite: "lax",
   path: "/",
   maxAge: 60,
+  secure: env.NODE_ENV === "production",
+  secrets: [env.SESSION_SECRET],
 });
 
 export type FlashMessage = {
