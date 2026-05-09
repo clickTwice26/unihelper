@@ -3,6 +3,7 @@ import { useLoaderData } from "react-router";
 import {
   BookOpen,
   CalendarDays,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -18,7 +19,7 @@ export function meta() {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type EventType = "quiz" | "assignment" | "mid" | "final";
+type EventType = "quiz" | "assignment" | "mid" | "final" | "task";
 
 type CalendarEvent = {
   id: string;
@@ -45,24 +46,35 @@ export async function loader({ request }: Route.LoaderArgs) {
   const courseIds = courses.map((c) => c.id);
   const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.title]));
 
-  if (courseIds.length === 0) return { events: [] as CalendarEvent[] };
-
-  const [quizzes, assignments, midExams, finalExams] = await Promise.all([
-    db.quiz.findMany({
-      where: { courseId: { in: courseIds } },
-      select: { id: true, title: true, quizDate: true, courseId: true, serial: true },
-    }),
-    db.assignment.findMany({
-      where: { courseId: { in: courseIds } },
-      select: { id: true, title: true, deadline: true, courseId: true },
-    }),
-    db.midExam.findMany({
-      where: { courseId: { in: courseIds } },
-      select: { id: true, examDate: true, courseId: true },
-    }),
-    db.finalExam.findMany({
-      where: { courseId: { in: courseIds } },
-      select: { id: true, examDate: true, courseId: true },
+  // Always fetch tasks (user-scoped). Only fetch course events when user has courses.
+  const [quizzes, assignments, midExams, finalExams, tasks] = await Promise.all([
+    courseIds.length > 0
+      ? db.quiz.findMany({
+          where: { courseId: { in: courseIds } },
+          select: { id: true, title: true, quizDate: true, courseId: true, serial: true },
+        })
+      : Promise.resolve([]),
+    courseIds.length > 0
+      ? db.assignment.findMany({
+          where: { courseId: { in: courseIds } },
+          select: { id: true, title: true, deadline: true, courseId: true },
+        })
+      : Promise.resolve([]),
+    courseIds.length > 0
+      ? db.midExam.findMany({
+          where: { courseId: { in: courseIds } },
+          select: { id: true, examDate: true, courseId: true },
+        })
+      : Promise.resolve([]),
+    courseIds.length > 0
+      ? db.finalExam.findMany({
+          where: { courseId: { in: courseIds } },
+          select: { id: true, examDate: true, courseId: true },
+        })
+      : Promise.resolve([]),
+    db.task.findMany({
+      where: { userId: session.id, deadline: { not: null } },
+      select: { id: true, title: true, deadline: true },
     }),
   ]);
 
@@ -95,6 +107,15 @@ export async function loader({ request }: Route.LoaderArgs) {
       courseName: courseMap[f.courseId] ?? "Unknown",
       type: "final" as const,
     })),
+    ...tasks
+      .filter((t) => t.deadline !== null)
+      .map((t) => ({
+        id: `task-${t.id}`,
+        date: t.deadline!.toISOString().slice(0, 10),
+        title: t.title,
+        courseName: "Task",
+        type: "task" as const,
+      })),
   ];
 
   events.sort((a, b) => a.date.localeCompare(b.date));
@@ -138,12 +159,12 @@ const EVENT_STYLES: Record<EventType, {
     icon: BookOpen,
     label: "Mid Exam",
   },
-  final: {
-    pill: "bg-red-100 text-red-800",
-    dot: "bg-red-600",
-    badge: "bg-red-50 border border-red-200 text-red-800",
-    icon: GraduationCap,
-    label: "Final Exam",
+  task: {
+    pill: "bg-violet-100 text-violet-700",
+    dot: "bg-violet-500",
+    badge: "bg-violet-50 border border-violet-200 text-violet-700",
+    icon: CheckSquare,
+    label: "Task",
   },
 };
 
@@ -410,7 +431,9 @@ export default function CalendarPage() {
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Legend</p>
             <div className="grid grid-cols-2 gap-2">
-              {(["quiz", "assignment", "mid", "final"] as const).map((t) => {
+              {([
+                "quiz", "assignment", "mid", "final", "task",
+              ] as const).map((t) => {
                 const s = EVENT_STYLES[t];
                 return (
                   <span

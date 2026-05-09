@@ -69,21 +69,39 @@ export async function loader({ request }: Route.LoaderArgs) {
   const session = await getAuthenticatedUser(request);
   if (!session) throw redirect("/login");
 
-  const tasks = await db.task.findMany({
-    where: { userId: session.id },
-    orderBy: [{ createdAt: "desc" }],
-    select: {
-      id: true,
-      title: true,
-      notes: true,
-      deadline: true,
-      status: true,
-      assignees: true,
-      createdAt: true,
-    },
-  });
+  const [tasks, buddyConnections] = await Promise.all([
+    db.task.findMany({
+      where: { userId: session.id },
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        notes: true,
+        deadline: true,
+        status: true,
+        assignees: true,
+        createdAt: true,
+      },
+    }),
+    db.buddyConnection.findMany({
+      where: { OR: [{ userAId: session.id }, { userBId: session.id }] },
+      select: {
+        userA: { select: { id: true, displayName: true } },
+        userB: { select: { id: true, displayName: true } },
+      },
+    }),
+  ]);
+
+  // Suggestion list: only accepted buddies, never email
+  const suggestions = buddyConnections
+    .map((c) => {
+      const buddy = c.userA.id === session.id ? c.userB : c.userA;
+      return buddy.displayName;
+    })
+    .filter((n): n is string => !!n);
 
   return {
+    suggestions,
     tasks: tasks.map((t) => ({
       ...t,
       deadline: t.deadline?.toISOString() ?? null,
@@ -180,18 +198,41 @@ export async function action({ request }: Route.ActionArgs) {
 function AssigneeInput({
   value,
   onChange,
+  suggestions = [],
 }: {
   value: string[];
   onChange: (v: string[]) => void;
+  suggestions?: string[];
 }) {
   const [inputVal, setInputVal] = useState("");
+  const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const filtered = suggestions.filter(
+    (s) =>
+      inputVal.trim().length > 0 &&
+      s.toLowerCase().includes(inputVal.toLowerCase()) &&
+      !value.includes(s),
+  );
 
   function addTag(raw: string) {
     const tag = raw.trim();
     if (!tag || value.includes(tag) || value.length >= 20) return;
     onChange([...value, tag]);
     setInputVal("");
+    setOpen(false);
   }
 
   function removeTag(tag: string) {
@@ -199,7 +240,7 @@ function AssigneeInput({
   }
 
   return (
-    <div>
+    <div ref={containerRef} className="relative">
       {value.map((tag) => (
         <input key={tag} type="hidden" name="assignees" value={tag} />
       ))}
@@ -230,26 +271,61 @@ function AssigneeInput({
           ref={inputRef}
           type="text"
           value={inputVal}
-          placeholder={value.length === 0 ? "Type a name and press Enter…" : ""}
-          onChange={(e) => setInputVal(e.target.value)}
+          placeholder={value.length === 0 ? "Type a name or pick a buddy…" : ""}
+          onChange={(e) => {
+            setInputVal(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              addTag(inputVal);
+              if (filtered.length > 0) addTag(filtered[0]);
+              else addTag(inputVal);
+            } else if (e.key === "Escape") {
+              setOpen(false);
             } else if (e.key === "," || e.key === "Tab") {
               e.preventDefault();
-              addTag(inputVal);
+              if (filtered.length > 0) addTag(filtered[0]);
+              else addTag(inputVal);
             } else if (e.key === "Backspace" && !inputVal && value.length > 0) {
               onChange(value.slice(0, -1));
             }
           }}
           onBlur={() => {
-            if (inputVal.trim()) addTag(inputVal);
+            // small delay so suggestion click fires first
+            setTimeout(() => {
+              setOpen(false);
+              if (inputVal.trim() && filtered.length === 0) addTag(inputVal);
+            }, 150);
           }}
           className="min-w-[140px] flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
         />
       </div>
-      <p className="mt-1 text-xs text-slate-400">Press Enter or comma to add a name</p>
+
+      {/* Suggestions dropdown */}
+      {open && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          {filtered.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault(); // prevent blur
+                addTag(s);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-slate-800 transition hover:bg-indigo-50 hover:text-indigo-700"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600">
+                {s.charAt(0).toUpperCase()}
+              </span>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-1 text-xs text-slate-400">Pick a buddy suggestion or type any name and press Enter</p>
     </div>
   );
 }
@@ -259,9 +335,11 @@ function AssigneeInput({
 function AddTaskModal({
   isSubmitting,
   onClose,
+  suggestions,
 }: {
   isSubmitting: boolean;
   onClose: () => void;
+  suggestions: string[];
 }) {
   const [assignees, setAssignees] = useState<string[]>([]);
 
@@ -321,7 +399,7 @@ function AddTaskModal({
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Assigned To
               </label>
-              <AssigneeInput value={assignees} onChange={setAssignees} />
+              <AssigneeInput value={assignees} onChange={setAssignees} suggestions={suggestions} />
             </div>
 
             {/* Notes */}
@@ -553,7 +631,7 @@ function TaskCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
-  const { tasks } = useLoaderData<typeof loader>();
+  const { tasks, suggestions } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting =
     navigation.state !== "idle" &&
@@ -563,13 +641,18 @@ export default function TasksPage() {
   const [filter, setFilter] = useState<"ALL" | TaskStatus>("ALL");
 
   // Auto-close modal after successful create
-  const prevNavState = useRef(navigation.state);
+  const wasCreating = useRef(false);
   useEffect(() => {
-    if (prevNavState.current === "submitting" && navigation.state === "idle") {
+    const creating =
+      navigation.state !== "idle" &&
+      String(navigation.formData?.get("intent")) === "create";
+    if (creating) {
+      wasCreating.current = true;
+    } else if (wasCreating.current && navigation.state === "idle") {
+      wasCreating.current = false;
       setShowModal(false);
     }
-    prevNavState.current = navigation.state;
-  }, [navigation.state]);
+  }, [navigation.state, navigation.formData]);
 
   const now = new Date();
   const todoCnt = tasks.filter((t) => t.status === "TODO").length;
@@ -591,7 +674,7 @@ export default function TasksPage() {
   return (
     <>
       {showModal && (
-        <AddTaskModal isSubmitting={isSubmitting} onClose={() => setShowModal(false)} />
+        <AddTaskModal isSubmitting={isSubmitting} onClose={() => setShowModal(false)} suggestions={suggestions as string[]} />
       )}
 
       <div className="space-y-5">
