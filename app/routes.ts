@@ -6,7 +6,6 @@ export default [
   ]),
   layout("routes/dashboard-layout.tsx", [
     route("dashboard", "routes/dashboard/home.tsx"),
-    route("dashboard/home", "routes/dashboard/home.tsx", { id: "dashboard-home-alias" }),
     route("dashboard/profile", "routes/dashboard/profile.tsx"),
     route("dashboard/social", "routes/dashboard/social.tsx"),
     route("dashboard/courses", "routes/dashboard/courses.tsx"),

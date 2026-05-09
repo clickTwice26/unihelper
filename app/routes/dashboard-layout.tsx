@@ -1,8 +1,7 @@
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ComponentType, useEffect, useRef, useState } from "react";
 import { Form, Link, NavLink, Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import {
   Search,
-  Home,
   LayoutDashboard,
   LayoutGrid,
   Layers,
@@ -35,8 +34,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { user };
 }
 
-const navItemsSimple = [
-  { label: "Home", to: "/dashboard/home", icon: Home, end: true },
+const navItemsSimple: Array<{
+  label: string;
+  to: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  end: boolean;
+  badge?: string;
+}> = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard, end: true },
   { label: "Social", to: "/dashboard/social", icon: Globe, end: false },
   { label: "Courses", to: "/dashboard/courses", icon: BookOpen, end: false },
@@ -60,7 +64,7 @@ export default function DashboardLayout() {
   const { pathname } = useLocation();
 
   const pageTitle = (() => {
-    if (pathname === "/dashboard" || pathname === "/dashboard/home") return "Dashboard";
+    if (pathname === "/dashboard") return "Dashboard";
     if (pathname.startsWith("/dashboard/profile")) return "Profile";
     if (pathname.startsWith("/dashboard/social")) return "Social";
     if (pathname.startsWith("/dashboard/courses")) return "Courses";
