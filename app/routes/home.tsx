@@ -4,7 +4,7 @@ import type { Route } from "./+types/home";
 
 export function meta({ data }: Route.MetaArgs) {
   return [
-    { title: `${data?.appName ?? "Unihelper"} | Full-Stack Platform` },
+    { title: `${data?.appName ?? "UniBuddy"} | Full-Stack Platform` },
     {
       name: "description",
       content:

@@ -2,23 +2,30 @@ import { useRef, useState } from "react";
 import { Form, Link, useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import {
   ArrowLeft,
+  BookMarked,
   BookOpen,
+  CalendarDays,
   Check,
   ChevronRight,
+  ClipboardList,
+  Clock,
   Copy,
   Edit2,
   ExternalLink,
   Download,
   Eye,
   File,
+  FileText,
   FolderOpen,
   FolderPlus,
+  GraduationCap,
   HardDrive,
   Info,
   Link2,
   Mail,
   MessageCircle,
   Phone,
+  Plus,
   Trash2,
   Upload,
   User,
@@ -29,7 +36,7 @@ import type { Route } from "./+types/course-detail";
 
 export function meta({ data }: Route.MetaArgs) {
   const title = (data as { course?: { title?: string } } | undefined)?.course?.title;
-  return [{ title: title ? `${title} | Unihelper` : "Course | Unihelper" }];
+  return [{ title: title ? `${title} | UniBuddy` : "Course | UniBuddy" }];
 }
 
 const STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
@@ -64,6 +71,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   let storageFiles: { id: string; name: string; path: string; isFolder: boolean; size: number; mimeType: string | null; key: string; createdAt: Date; courseId: string }[] = [];
   let storageUsageBytes = 0;
   let storagePath = "/";
+  let quizzes: { id: string; title: string; syllabus: string; quizDate: Date; deadline: Date | null; createdAt: Date }[] = [];
+  let assignments: { id: string; title: string; description: string; deadline: Date; createdAt: Date }[] = [];
+  let midExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
+  let finalExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
 
   if (activeTab === "storage") {
     const { listCourseFiles, getCourseStorageUsage, sanitizeStoragePath } =
@@ -76,8 +87,42 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ]);
   }
 
+  if (activeTab === "quiz") {
+    const { db } = await import("~/lib/db.server");
+    quizzes = await db.quiz.findMany({
+      where: { courseId },
+      orderBy: { quizDate: "asc" },
+      select: { id: true, title: true, syllabus: true, quizDate: true, deadline: true, createdAt: true },
+    });
+  }
+
+  if (activeTab === "assignment") {
+    const { db } = await import("~/lib/db.server");
+    assignments = await db.assignment.findMany({
+      where: { courseId },
+      orderBy: { deadline: "asc" },
+      select: { id: true, title: true, description: true, deadline: true, createdAt: true },
+    });
+  }
+
+  if (activeTab === "mid") {
+    const { db } = await import("~/lib/db.server");
+    midExam = await db.midExam.findUnique({
+      where: { courseId },
+      select: { id: true, syllabus: true, examDate: true, venue: true, notes: true },
+    });
+  }
+
+  if (activeTab === "final") {
+    const { db } = await import("~/lib/db.server");
+    finalExam = await db.finalExam.findUnique({
+      where: { courseId },
+      select: { id: true, syllabus: true, examDate: true, venue: true, notes: true },
+    });
+  }
+
   const r2PublicUrl = (await import("~/lib/env.server")).env.R2_PUBLIC_URL.replace(/\/$/, "");
-  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl };
+  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -183,7 +228,103 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
   }
 
-  // ── Course: delete ──────────────────────────────────────────────────────
+  // ── Quiz: create ───────────────────────────────────────────────────────
+  if (intent === "create-quiz") {
+    const { db } = await import("~/lib/db.server");
+    const title = String(formData.get("title") ?? "").trim().slice(0, 200);
+    const syllabus = String(formData.get("syllabus") ?? "").trim().slice(0, 2000);
+    const quizDateRaw = String(formData.get("quizDate") ?? "").trim();
+    const deadlineRaw = String(formData.get("deadline") ?? "").trim();
+
+    if (!title) throw await flash("error", "Quiz title is required.");
+    if (!syllabus) throw await flash("error", "Syllabus is required.");
+    if (!quizDateRaw) throw await flash("error", "Quiz date is required.");
+
+    const quizDate = new Date(quizDateRaw);
+    if (isNaN(quizDate.getTime())) throw await flash("error", "Invalid quiz date.");
+    const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
+    if (deadline && isNaN(deadline.getTime())) throw await flash("error", "Invalid deadline.");
+
+    const existing = await db.quiz.count({ where: { courseId } });
+    if (existing >= 4) throw await flash("error", "Maximum of 4 quizzes per course reached.");
+
+    await db.quiz.create({
+      data: { courseId, title, syllabus, quizDate, deadline },
+    });
+    throw await flash("success", `Quiz "${title}" logged.`);
+  }
+
+  // ── Quiz: delete ───────────────────────────────────────────────────────
+  if (intent === "delete-quiz") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    const quiz = await db.quiz.findUnique({ where: { id: quizId }, select: { courseId: true } });
+    if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
+    await db.quiz.delete({ where: { id: quizId } });
+    throw await flash("success", "Quiz deleted.");
+  }
+
+  // ── Assignment: create ─────────────────────────────────────────────
+  if (intent === "create-assignment") {
+    const { db } = await import("~/lib/db.server");
+    const title = String(formData.get("title") ?? "").trim().slice(0, 200);
+    const description = String(formData.get("description") ?? "").trim().slice(0, 5000);
+    const deadlineRaw = String(formData.get("deadline") ?? "").trim();
+    if (!title) throw await flash("error", "Assignment title is required.");
+    if (!description) throw await flash("error", "Description is required.");
+    if (!deadlineRaw) throw await flash("error", "Deadline is required.");
+    const deadline = new Date(deadlineRaw);
+    if (isNaN(deadline.getTime())) throw await flash("error", "Invalid deadline.");
+    await db.assignment.create({ data: { courseId, title, description, deadline } });
+    throw await flash("success", `Assignment "${title}" added.`);
+  }
+
+  // ── Assignment: delete ─────────────────────────────────────────────
+  if (intent === "delete-assignment") {
+    const { db } = await import("~/lib/db.server");
+    const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+    if (!assignmentId) throw await flash("error", "Missing assignment ID.");
+    const item = await db.assignment.findUnique({ where: { id: assignmentId }, select: { courseId: true } });
+    if (!item || item.courseId !== courseId) throw await flash("error", "Assignment not found.");
+    await db.assignment.delete({ where: { id: assignmentId } });
+    throw await flash("success", "Assignment deleted.");
+  }
+
+  // ── Mid / Final: upsert ────────────────────────────────────────────
+  if (intent === "upsert-mid" || intent === "upsert-final") {
+    const { db } = await import("~/lib/db.server");
+    const syllabus = String(formData.get("syllabus") ?? "").trim().slice(0, 5000);
+    const examDateRaw = String(formData.get("examDate") ?? "").trim();
+    const venue = String(formData.get("venue") ?? "").trim().slice(0, 200) || null;
+    const notes = String(formData.get("notes") ?? "").trim().slice(0, 2000) || null;
+    if (!syllabus) throw await flash("error", "Syllabus is required.");
+    if (!examDateRaw) throw await flash("error", "Exam date is required.");
+    const examDate = new Date(examDateRaw);
+    if (isNaN(examDate.getTime())) throw await flash("error", "Invalid exam date.");
+    const isMid = intent === "upsert-mid";
+    const model = isMid ? db.midExam : db.finalExam;
+    await model.upsert({
+      where: { courseId },
+      create: { courseId, syllabus, examDate, venue, notes },
+      update: { syllabus, examDate, venue, notes },
+    });
+    throw await flash("success", `${isMid ? "Mid" : "Final"} exam details saved.`);
+  }
+
+  // ── Mid / Final: delete ────────────────────────────────────────────
+  if (intent === "delete-mid") {
+    const { db } = await import("~/lib/db.server");
+    await db.midExam.deleteMany({ where: { courseId } });
+    throw await flash("success", "Mid exam details removed.");
+  }
+  if (intent === "delete-final") {
+    const { db } = await import("~/lib/db.server");
+    await db.finalExam.deleteMany({ where: { courseId } });
+    throw await flash("success", "Final exam details removed.");
+  }
+
+  // ── Course: delete ─────────────────────────────────────────────────────
   if (intent === "delete") {
     const { deleteCourse } = await import("~/lib/course.server");
     try {
@@ -527,6 +668,31 @@ type StorageFile = {
   courseId: string;
 };
 
+type QuizEntry = {
+  id: string;
+  title: string;
+  syllabus: string;
+  quizDate: Date | string;
+  deadline: Date | string | null;
+  createdAt: Date | string;
+};
+
+type AssignmentEntry = {
+  id: string;
+  title: string;
+  description: string;
+  deadline: Date | string;
+  createdAt: Date | string;
+};
+
+type ExamEntry = {
+  id: string;
+  syllabus: string;
+  examDate: Date | string;
+  venue: string | null;
+  notes: string | null;
+};
+
 function previewType(mimeType: string | null): "image" | "video" | "pdf" | "none" {
   if (!mimeType) return "none";
   if (mimeType.startsWith("image/")) return "image";
@@ -637,6 +803,507 @@ function FilePreviewModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Quiz Tab ────────────────────────────────────────────────────────────────
+
+function QuizTab({
+  courseId,
+  quizzes,
+  navigation,
+}: {
+  courseId: string;
+  quizzes: QuizEntry[];
+  navigation: ReturnType<typeof useNavigation>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const isSubmitting = navigation.state === "submitting";
+  const intent = String(navigation.formData?.get("intent") ?? "");
+
+  function fmt(dateVal: Date | string) {
+    return new Date(dateVal).toLocaleDateString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+    });
+  }
+
+  return (
+    <div className="px-6 py-5">
+      {/* Header row */}
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">
+          {quizzes.length} / 4 {quizzes.length === 1 ? "quiz" : "quizzes"} logged
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          disabled={quizzes.length >= 4}
+          title={quizzes.length >= 4 ? "Maximum 4 quizzes per course" : undefined}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus size={15} />
+          Log Quiz
+        </button>
+      </div>
+
+      {/* New quiz form */}
+      {showForm ? (
+        <Form method="post" preventScrollReset className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+          <input type="hidden" name="intent" value="create-quiz" />
+          <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
+          <h3 className="mb-4 text-sm font-bold text-slate-800">Log a New Quiz</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Title / Topic</label>
+              <input
+                name="title"
+                type="text"
+                required
+                maxLength={200}
+                placeholder="e.g. Mid-term Chapter 3-5"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Syllabus / Topics Covered</label>
+              <textarea
+                name="syllabus"
+                required
+                maxLength={2000}
+                rows={3}
+                placeholder="Chapter 3: Arrays, Chapter 4: Linked Lists…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Date</label>
+              <input
+                name="quizDate"
+                type="date"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Deadline <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                name="deadline"
+                type="datetime-local"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={isSubmitting && intent === "create-quiz"}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+            >
+              {isSubmitting && intent === "create-quiz" ? "Saving…" : "Save Quiz"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </Form>
+      ) : null}
+
+      {/* Quiz list */}
+      {quizzes.length === 0 && !showForm ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <ClipboardList size={22} />
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-700">No quizzes logged yet</p>
+          <p className="mt-1 text-sm text-slate-400">Click "Log Quiz" to add your first quiz.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {quizzes.map((quiz, idx) => {
+            const isDeleting = isSubmitting && intent === "delete-quiz" && String(navigation.formData?.get("quizId")) === quiz.id;
+            return (
+              <div key={quiz.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700">Quiz #{idx + 1}</span>
+                      <p className="truncate text-sm font-bold text-slate-800">{quiz.title}</p>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                        <CalendarDays size={12} />
+                        Quiz: <span className="font-semibold text-slate-700">{fmt(quiz.quizDate)}</span>
+                      </span>
+                      {quiz.deadline ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-600">
+                          <Clock size={12} />
+                          Deadline: <span className="font-semibold">{fmt(quiz.deadline)}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{quiz.syllabus}</p>
+                  </div>
+                  <div className="shrink-0">
+                    {deleteConfirmId === quiz.id ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-500">Delete?</span>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100"
+                        >
+                          No
+                        </button>
+                        <Form method="post" preventScrollReset>
+                          <input type="hidden" name="intent" value="delete-quiz" />
+                          <input type="hidden" name="quizId" value={quiz.id} />
+                          <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
+                          <button
+                            type="submit"
+                            disabled={isDeleting}
+                            className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+                          >
+                            {isDeleting ? "…" : "Yes"}
+                          </button>
+                        </Form>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmId(quiz.id)}
+                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                        title="Delete quiz"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Assignment Tab ───────────────────────────────────────────────────────────
+
+function AssignmentTab({
+  courseId,
+  assignments,
+  navigation,
+}: {
+  courseId: string;
+  assignments: AssignmentEntry[];
+  navigation: ReturnType<typeof useNavigation>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const isSubmitting = navigation.state === "submitting";
+  const intent = String(navigation.formData?.get("intent") ?? "");
+
+  function fmt(dateVal: Date | string) {
+    return new Date(dateVal).toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  function isPast(dateVal: Date | string) {
+    return new Date(dateVal) < new Date();
+  }
+
+  return (
+    <div className="px-6 py-5">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">
+          {assignments.length} {assignments.length === 1 ? "assignment" : "assignments"}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+        >
+          <Plus size={15} />
+          Add Assignment
+        </button>
+      </div>
+
+      {showForm ? (
+        <Form method="post" preventScrollReset className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+          <input type="hidden" name="intent" value="create-assignment" />
+          <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=assignment`} />
+          <h3 className="mb-4 text-sm font-bold text-slate-800">Add Assignment</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Title</label>
+              <input
+                name="title"
+                type="text"
+                required
+                maxLength={200}
+                placeholder="e.g. Assignment 1 — Sorting Algorithms"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Description / Instructions</label>
+              <textarea
+                name="description"
+                required
+                maxLength={5000}
+                rows={4}
+                placeholder="Implement QuickSort and MergeSort, submit a report…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Deadline</label>
+              <input
+                name="deadline"
+                type="datetime-local"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={isSubmitting && intent === "create-assignment"}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+            >
+              {isSubmitting && intent === "create-assignment" ? "Saving…" : "Save"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100">
+              Cancel
+            </button>
+          </div>
+        </Form>
+      ) : null}
+
+      {assignments.length === 0 && !showForm ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <FileText size={22} />
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-700">No assignments yet</p>
+          <p className="mt-1 text-sm text-slate-400">Click "Add Assignment" to log one.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {assignments.map((a, idx) => {
+            const isDeleting = isSubmitting && intent === "delete-assignment" && String(navigation.formData?.get("assignmentId")) === a.id;
+            const overdue = isPast(a.deadline);
+            return (
+              <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="shrink-0 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700">#{idx + 1}</span>
+                      <p className="text-sm font-bold text-slate-800">{a.title}</p>
+                    </div>
+                    <div className="mt-1.5">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${overdue ? "text-red-600" : "text-amber-600"}`}>
+                        <Clock size={12} />
+                        Deadline: {fmt(a.deadline)}{overdue ? " (overdue)" : ""}
+                      </span>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{a.description}</p>
+                  </div>
+                  <div className="shrink-0">
+                    {deleteConfirmId === a.id ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-500">Delete?</span>
+                        <button type="button" onClick={() => setDeleteConfirmId(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">No</button>
+                        <Form method="post" preventScrollReset>
+                          <input type="hidden" name="intent" value="delete-assignment" />
+                          <input type="hidden" name="assignmentId" value={a.id} />
+                          <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=assignment`} />
+                          <button type="submit" disabled={isDeleting} className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60">
+                            {isDeleting ? "…" : "Yes"}
+                          </button>
+                        </Form>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setDeleteConfirmId(a.id)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600" title="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Exam Tab (Mid / Final) ───────────────────────────────────────────────────
+
+function ExamTab({
+  courseId,
+  kind,
+  exam,
+  navigation,
+}: {
+  courseId: string;
+  kind: "mid" | "final";
+  exam: ExamEntry | null;
+  navigation: ReturnType<typeof useNavigation>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const isSubmitting = navigation.state === "submitting";
+  const intent = String(navigation.formData?.get("intent") ?? "");
+  const upsertIntent = kind === "mid" ? "upsert-mid" : "upsert-final";
+  const deleteIntent = kind === "mid" ? "delete-mid" : "delete-final";
+  const label = kind === "mid" ? "Mid Exam" : "Final Exam";
+  const tabParam = kind === "mid" ? "mid" : "final";
+
+  function fmt(dateVal: Date | string) {
+    return new Date(dateVal).toLocaleDateString(undefined, {
+      year: "numeric", month: "long", day: "numeric",
+    });
+  }
+
+  // Pre-fill form values from existing exam
+  const defaultDate = exam ? new Date(exam.examDate).toISOString().slice(0, 10) : "";
+
+  return (
+    <div className="px-6 py-5">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">{label} Details</p>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+        >
+          <Edit2 size={13} />
+          {exam ? "Edit" : "Set Details"}
+        </button>
+      </div>
+
+      {showForm ? (
+        <Form method="post" preventScrollReset className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+          <input type="hidden" name="intent" value={upsertIntent} />
+          <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=${tabParam}`} />
+          <h3 className="mb-4 text-sm font-bold text-slate-800">{exam ? `Edit ${label}` : `Set ${label} Details`}</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Syllabus / Topics</label>
+              <textarea
+                name="syllabus"
+                required
+                maxLength={5000}
+                rows={4}
+                defaultValue={exam?.syllabus ?? ""}
+                placeholder="Chapter 1-6, all labs, case studies…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">Exam Date</label>
+              <input
+                name="examDate"
+                type="date"
+                required
+                defaultValue={defaultDate}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Venue <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                name="venue"
+                type="text"
+                maxLength={200}
+                defaultValue={exam?.venue ?? ""}
+                placeholder="e.g. Hall A, Room 301"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Notes <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <textarea
+                name="notes"
+                maxLength={2000}
+                rows={2}
+                defaultValue={exam?.notes ?? ""}
+                placeholder="Open book, bring calculator…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button type="submit" disabled={isSubmitting && intent === upsertIntent} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60">
+              {isSubmitting && intent === upsertIntent ? "Saving…" : "Save"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100">
+              Cancel
+            </button>
+          </div>
+        </Form>
+      ) : null}
+
+      {!exam && !showForm ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            {kind === "mid" ? <BookMarked size={22} /> : <GraduationCap size={22} />}
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-700">No {label} details yet</p>
+          <p className="mt-1 text-sm text-slate-400">Click "Set Details" to add exam information.</p>
+        </div>
+      ) : exam ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-4">
+              <div>
+                <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Exam Date</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-800">{fmt(exam.examDate)}</p>
+              </div>
+              {exam.venue ? (
+                <div>
+                  <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Venue</p>
+                  <p className="mt-0.5 text-sm text-slate-700">{exam.venue}</p>
+                </div>
+              ) : null}
+              <div>
+                <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Syllabus</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{exam.syllabus}</p>
+              </div>
+              {exam.notes ? (
+                <div>
+                  <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Notes</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{exam.notes}</p>
+                </div>
+              ) : null}
+            </div>
+            <Form method="post" preventScrollReset className="shrink-0">
+              <input type="hidden" name="intent" value={deleteIntent} />
+              <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=${tabParam}`} />
+              <button type="submit" disabled={isSubmitting && intent === deleteIntent} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-60" title="Remove exam details">
+                <Trash2 size={15} />
+              </button>
+            </Form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1024,17 +1691,17 @@ function InfoRow({
 }
 
 export default function CourseDetailPage() {
-  const { course, backHref, storageFiles, storageUsageBytes, storagePath, r2PublicUrl } =
+  const { course, backHref, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  type Tab = "information" | "links" | "storage";
+  type Tab = "information" | "links" | "storage" | "quiz" | "assignment" | "mid" | "final";
   const rawTab = searchParams.get("tab") ?? "information";
-  const activeTab: Tab =
-    rawTab === "links" ? "links" : rawTab === "storage" ? "storage" : "information";
+  const validTabs: Tab[] = ["links", "storage", "quiz", "assignment", "mid", "final"];
+  const activeTab: Tab = (validTabs.includes(rawTab as Tab) ? rawTab : "information") as Tab;
 
   const isSubmitting = navigation.state === "submitting";
   const isDeleting =
@@ -1056,7 +1723,6 @@ export default function CourseDetailPage() {
       { preventScrollReset: true },
     );
   }
-
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -1145,6 +1811,10 @@ export default function CourseDetailPage() {
               { key: "information", icon: Info, label: "Information" },
               { key: "links", icon: Link2, label: "Links" },
               { key: "storage", icon: HardDrive, label: "Storage" },
+              { key: "quiz", icon: ClipboardList, label: "Quiz" },
+              { key: "assignment", icon: FileText, label: "Assignment" },
+              { key: "mid", icon: BookMarked, label: "Mid" },
+              { key: "final", icon: GraduationCap, label: "Final" },
             ] as const
           ).map(({ key, icon: Icon, label }) => (
             <button
@@ -1255,6 +1925,44 @@ export default function CourseDetailPage() {
             storageUsageBytes={storageUsageBytes}
             navigation={navigation}
             r2PublicUrl={r2PublicUrl}
+          />
+        ) : null}
+
+        {/* Tab: Quiz */}
+        {activeTab === "quiz" ? (
+          <QuizTab
+            courseId={course.id}
+            quizzes={quizzes as QuizEntry[]}
+            navigation={navigation}
+          />
+        ) : null}
+
+        {/* Tab: Assignment */}
+        {activeTab === "assignment" ? (
+          <AssignmentTab
+            courseId={course.id}
+            assignments={assignments as AssignmentEntry[]}
+            navigation={navigation}
+          />
+        ) : null}
+
+        {/* Tab: Mid */}
+        {activeTab === "mid" ? (
+          <ExamTab
+            courseId={course.id}
+            kind="mid"
+            exam={midExam as ExamEntry | null}
+            navigation={navigation}
+          />
+        ) : null}
+
+        {/* Tab: Final */}
+        {activeTab === "final" ? (
+          <ExamTab
+            courseId={course.id}
+            kind="final"
+            exam={finalExam as ExamEntry | null}
+            navigation={navigation}
           />
         ) : null}
       </div>

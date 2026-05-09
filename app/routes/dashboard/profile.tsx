@@ -4,7 +4,7 @@ import { Camera, KeyRound, Mail, Shield, User } from "lucide-react";
 import type { Route } from "./+types/home";
 
 export function meta() {
-  return [{ title: "Profile | Unihelper" }];
+  return [{ title: "Profile | UniBuddy" }];
 }
 
 // ── Loader ──────────────────────────────────────────────────────────────────

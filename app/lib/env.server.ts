@@ -5,7 +5,7 @@ export const env = cleanEnv(process.env, {
     choices: ["development", "test", "production"],
     default: "development",
   }),
-  APP_NAME: str({ default: "Unihelper" }),
+  APP_NAME: str({ default: "UniBuddy" }),
   PORT: port({ default: 3000 }),
   LOG_LEVEL: str({
     choices: ["fatal", "error", "warn", "info", "debug", "trace", "silent"],

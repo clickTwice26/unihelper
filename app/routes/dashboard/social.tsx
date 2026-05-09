@@ -36,7 +36,7 @@ function buildSocialPath(tab: SocialTab, searchQuery: string) {
 
 function publicName(name: string | null) {
   const trimmed = name?.trim();
-  return trimmed ? trimmed : "Unihelper member";
+  return trimmed ? trimmed : "UniBuddy member";
 }
 
 function matchesSearch(name: string | null, searchQuery: string) {
@@ -58,7 +58,7 @@ function initialsFor(name: string | null) {
 }
 
 export function meta() {
-  return [{ title: "Social | Unihelper" }];
+  return [{ title: "Social | UniBuddy" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {

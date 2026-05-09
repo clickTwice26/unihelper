@@ -13,10 +13,10 @@ type ActionData = {
 
 export function meta() {
   return [
-    { title: "Create Account | Unihelper" },
+    { title: "Create Account | UniBuddy" },
     {
       name: "description",
-      content: "Create a Unihelper account from the registration page.",
+      content: "Create a UniBuddy account from the registration page.",
     },
   ];
 }

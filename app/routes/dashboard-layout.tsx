@@ -100,7 +100,7 @@ export default function DashboardLayout() {
   // Use user's initials for the fallback avatar.
   const initials = (user.displayName ?? user.email).slice(0, 2).toUpperCase();
 
-  // "Untitled UI" simple format widths.
+  // "UniBuddy" simple format widths.
   const desktopSidebarW = collapsed ? "5rem" : "17.5rem";
   const sidebarStyle = { "--sidebar-w": desktopSidebarW } as CSSProperties;
 
@@ -131,7 +131,7 @@ export default function DashboardLayout() {
           <Link
             to="/"
             className="flex items-center gap-3 overflow-hidden min-w-0"
-            aria-label="Untitled UI home"
+            aria-label="UniBuddy home"
             onClick={() => setMobileNavOpen(false)}
           >
             <div className="flex items-center justify-center shrink-0 w-8 h-8 rounded-lg border border-slate-200 shadow-sm relative overflow-hidden bg-white">
@@ -144,7 +144,7 @@ export default function DashboardLayout() {
                 collapsed ? "lg:hidden" : ""
               }`}
             >
-              Untitled UI
+              UniBuddy
             </span>
           </Link>
 

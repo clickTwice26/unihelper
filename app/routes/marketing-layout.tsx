@@ -16,10 +16,10 @@ export default function MarketingLayout() {
     <div className="app-shell">
       <div className="nav-frame">
         <header className="nav-shell">
-          <Link to="/" className="brand-lockup" aria-label="Unihelper home">
+          <Link to="/" className="brand-lockup" aria-label="UniBuddy home">
             <span className="brand-mark">U</span>
             <span>
-              <span className="type-brand block text-slate-900">Unihelper</span>
+              <span className="type-brand block text-slate-900">UniBuddy</span>
               <span className="type-caption block text-slate-500">
                 Remix-style full-stack workspace
               </span>

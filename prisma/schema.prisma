@@ -87,6 +87,9 @@ model Course {
   owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   files        CourseFile[]
   quizzes      Quiz[]
+  assignments  Assignment[]
+  midExam      MidExam?
+  finalExam    FinalExam?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -107,4 +110,55 @@ model CourseFile {
 
   @@unique([courseId, key], name: "courseId_key")
   @@index([courseId, path])
+}
+
+model Quiz {
+  id        String    @id @default(cuid())
+  courseId  String
+  title     String
+  syllabus  String    @db.Text
+  quizDate  DateTime
+  deadline  DateTime?
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([courseId, quizDate])
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String   @db.Text
+  deadline    DateTime
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([courseId, deadline])
+}
+
+model MidExam {
+  id        String   @id @default(cuid())
+  courseId  String   @unique
+  syllabus  String   @db.Text
+  examDate  DateTime
+  venue     String?
+  notes     String?  @db.Text
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FinalExam {
+  id        String   @id @default(cuid())
+  courseId  String   @unique
+  syllabus  String   @db.Text
+  examDate  DateTime
+  venue     String?
+  notes     String?  @db.Text
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

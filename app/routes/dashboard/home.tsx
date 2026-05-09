@@ -4,7 +4,7 @@ import type { Route } from "./+types/home";
 import { db } from "~/lib/db.server";
 
 export function meta() {
-  return [{ title: "Dashboard | Unihelper" }];
+  return [{ title: "Dashboard | UniBuddy" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {

@@ -35,7 +35,7 @@ type ModalState =
   | { mode: "edit"; course: Course };
 
 export function meta() {
-  return [{ title: "Courses | Unihelper" }];
+  return [{ title: "Courses | UniBuddy" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {

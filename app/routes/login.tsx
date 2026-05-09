@@ -12,10 +12,10 @@ type ActionData = {
 
 export function meta() {
   return [
-    { title: "Sign In | Unihelper" },
+    { title: "Sign In | UniBuddy" },
     {
       name: "description",
-      content: "Access your Unihelper workspace from the login page.",
+      content: "Access your UniBuddy workspace from the login page.",
     },
   ];
 }
@@ -100,7 +100,7 @@ export default function Login() {
         <div className="surface-panel auth-panel">
           <div className="space-y-4">
             <p className="eyebrow">Welcome Back</p>
-            <h1 className="type-heading-lg max-w-xl text-slate-900">Sign in to continue building inside Unihelper.</h1>
+            <h1 className="type-heading-lg max-w-xl text-slate-900">Sign in to continue building inside UniBuddy.</h1>
             <p className="type-body-md max-w-2xl text-slate-600">
               Use this page as the foundation for password auth, magic links, SSO,
               or any external identity provider you attach later.
