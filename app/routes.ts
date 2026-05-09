@@ -10,6 +10,7 @@ export default [
     route("dashboard/profile", "routes/dashboard/profile.tsx"),
     route("dashboard/social", "routes/dashboard/social.tsx"),
     route("dashboard/courses", "routes/dashboard/courses.tsx"),
+    route("dashboard/courses/:courseId", "routes/dashboard/course-detail.tsx"),
   ]),
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),

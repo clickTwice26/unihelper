@@ -4,9 +4,8 @@ import {
   ArrowLeft,
   BookOpen,
   Edit2,
-  ExternalLink,
+  Eye,
   Mail,
-  MessageCircle,
   Phone,
   Plus,
   Trash2,
@@ -323,33 +322,16 @@ function CourseCard({
         ) : null}
       </div>
 
-      {/* Links */}
-      {course.blcLink || course.groupLink ? (
-        <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-          {course.blcLink ? (
-            <a
-              href={course.blcLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-            >
-              <ExternalLink size={12} />
-              BLC Link
-            </a>
-          ) : null}
-          {course.groupLink ? (
-            <a
-              href={course.groupLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
-            >
-              <MessageCircle size={12} />
-              Group Link
-            </a>
-          ) : null}
-        </div>
-      ) : null}
+      {/* View button */}
+      <div className="border-t border-slate-100 pt-3">
+        <Link
+          to={`/dashboard/courses/${course.id}${ownerId !== course.ownerId ? `?view=${course.ownerId}` : ""}`}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          <Eye size={13} />
+          View
+        </Link>
+      </div>
 
       {/* Delete confirm */}
       {deleteConfirm ? (
