@@ -1,5 +1,5 @@
 import { Form, Link, useLoaderData, useNavigation } from "react-router";
-import { Check, Clock3, Globe, Lock, Search, UserCheck, UserPlus, Users } from "lucide-react";
+import { BookOpen, Check, Clock3, Globe, Lock, Search, UserCheck, UserPlus, Users } from "lucide-react";
 
 import type { Route } from "./+types/social";
 
@@ -218,7 +218,7 @@ export default function SocialPage() {
     : "Once a request is accepted from either side, the mutual connection will appear here.";
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="social-tabs-row flex w-full min-w-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm lg:inline-flex lg:w-auto">
           <Link
@@ -434,6 +434,14 @@ export default function SocialPage() {
                   <p>Connected on {new Date(buddy.connectedAt).toLocaleDateString("en-US")}</p>
                   <p>Member since {new Date(buddy.createdAt).getFullYear()}</p>
                 </div>
+
+                <Link
+                  to={`/dashboard/courses?view=${buddy.id}`}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                >
+                  <BookOpen size={13} />
+                  View Courses
+                </Link>
               </div>
             );
           })}

@@ -26,6 +26,7 @@ model User {
   receivedBuddyRequests BuddyRequest[] @relation("BuddyRequestReceiver")
   buddyConnectionsA   BuddyConnection[] @relation("BuddyConnectionA")
   buddyConnectionsB   BuddyConnection[] @relation("BuddyConnectionB")
+  courses             Course[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -70,4 +71,22 @@ model BuddyConnection {
 
   @@index([userAId, createdAt])
   @@index([userBId, createdAt])
+}
+
+model Course {
+  id           String   @id @default(cuid())
+  title        String
+  creditHours  Float
+  teacherName  String
+  teacherInfo  String?  @db.Text
+  teacherEmail String?
+  teacherPhone String?
+  blcLink      String?
+  groupLink    String?
+  ownerId      String
+  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([ownerId, createdAt])
 }
