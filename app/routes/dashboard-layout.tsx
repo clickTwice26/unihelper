@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Form, Link, NavLink, Outlet, redirect, useLoaderData } from "react-router";
 import {
   Search,
@@ -49,6 +49,18 @@ const footerItems = [
 export default function DashboardLayout() {
   const { user } = useLoaderData<typeof loader>();
   const [collapsed, setCollapsed] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   
   // Use user's initials for the fallback avatar.
   const initials = (user.displayName ?? user.email).slice(0, 2).toUpperCase();
@@ -237,17 +249,6 @@ export default function DashboardLayout() {
              )}
            </div>
 
-           {!collapsed && (
-             <Form action="/logout" method="post" className="shrink-0 flex">
-                <button
-                  type="submit"
-                  title="Sign out"
-                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-md hover:bg-slate-100 transition-colors"
-                >
-                  <LogOut size={18} />
-                </button>
-             </Form>
-           )}
         </div>
       </aside>
 
@@ -265,8 +266,33 @@ export default function DashboardLayout() {
             <button className="text-slate-500 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-md transition-colors" aria-label="Notifications">
               <Bell size={20} />
             </button>
-            <div className="h-8 w-8 shrink-0 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-700 shadow-sm">
+            <div className="relative" ref={avatarRef}>
+              <button
+                type="button"
+                onClick={() => setAvatarOpen((o) => !o)}
+                className="h-8 w-8 shrink-0 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-700 shadow-sm hover:ring-2 hover:ring-indigo-300 transition-all"
+                aria-label="User menu"
+                aria-expanded={avatarOpen}
+              >
                 {initials}
+              </button>
+              {avatarOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+                  <div className="px-4 py-3 border-b border-slate-100">
+                    <p className="text-[0.875rem] font-semibold text-slate-900 truncate">{user.displayName ?? user.email}</p>
+                    <p className="text-[0.78rem] text-slate-500 truncate mt-0.5">{user.email}</p>
+                  </div>
+                  <Form action="/logout" method="post">
+                    <button
+                      type="submit"
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.875rem] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut size={16} />
+                      Sign out
+                    </button>
+                  </Form>
+                </div>
+              )}
             </div>
           </div>
         </header>
