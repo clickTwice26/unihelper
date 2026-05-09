@@ -24,6 +24,7 @@ import {
   Link2,
   Mail,
   MessageCircle,
+  Monitor,
   Phone,
   Plus,
   Trash2,
@@ -76,6 +77,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   let midExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
   let finalExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
   let customLinks: { id: string; label: string; url: string; createdAt: Date }[] = [];
+  let presentation: { id: string; title: string; description: string; presentationDate: Date; venue: string | null; notes: string | null } | null = null;
 
   if (activeTab === "storage") {
     const { listCourseFiles, getCourseStorageUsage, sanitizeStoragePath } =
@@ -131,8 +133,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     });
   }
 
+  if (activeTab === "presentation") {
+    const { db } = await import("~/lib/db.server");
+    presentation = await db.presentation.findUnique({
+      where: { courseId },
+      select: { id: true, title: true, description: true, presentationDate: true, venue: true, notes: true },
+    });
+  }
+
   const r2PublicUrl = (await import("~/lib/env.server")).env.R2_PUBLIC_URL.replace(/\/$/, "");
-  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks };
+  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks, presentation };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -380,6 +390,34 @@ export async function action({ request, params }: Route.ActionArgs) {
     const { db } = await import("~/lib/db.server");
     await db.finalExam.deleteMany({ where: { courseId } });
     throw await flash("success", "Final exam details removed.");
+  }
+
+  // ── Presentation: upsert ────────────────────────────────────────────────
+  if (intent === "upsert-presentation") {
+    const { db } = await import("~/lib/db.server");
+    const title = String(formData.get("title") ?? "").trim().slice(0, 200);
+    const description = String(formData.get("description") ?? "").trim().slice(0, 5000);
+    const dateRaw = String(formData.get("presentationDate") ?? "").trim();
+    const venue = String(formData.get("venue") ?? "").trim().slice(0, 200) || null;
+    const notes = String(formData.get("notes") ?? "").trim().slice(0, 2000) || null;
+    if (!title) throw await flash("error", "Presentation title is required.");
+    if (!description) throw await flash("error", "Description / topic is required.");
+    if (!dateRaw) throw await flash("error", "Presentation date is required.");
+    const presentationDate = new Date(dateRaw);
+    if (isNaN(presentationDate.getTime())) throw await flash("error", "Invalid date.");
+    await db.presentation.upsert({
+      where: { courseId },
+      create: { courseId, title, description, presentationDate, venue, notes },
+      update: { title, description, presentationDate, venue, notes },
+    });
+    throw await flash("success", "Presentation details saved.");
+  }
+
+  // ── Presentation: delete ────────────────────────────────────────────────
+  if (intent === "delete-presentation") {
+    const { db } = await import("~/lib/db.server");
+    await db.presentation.deleteMany({ where: { courseId } });
+    throw await flash("success", "Presentation details removed.");
   }
 
   // ── Course: delete ─────────────────────────────────────────────────────
@@ -1578,6 +1616,205 @@ function ExamTab({
   );
 }
 
+// ── Presentation Tab ─────────────────────────────────────────────────────────
+
+type PresentationEntry = {
+  id: string;
+  title: string;
+  description: string;
+  presentationDate: Date | string;
+  venue: string | null;
+  notes: string | null;
+};
+
+function PresentationTab({
+  courseId,
+  presentation,
+  navigation,
+}: {
+  courseId: string;
+  presentation: PresentationEntry | null;
+  navigation: ReturnType<typeof useNavigation>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const isSubmitting = navigation.state === "submitting";
+  const intent = String(navigation.formData?.get("intent") ?? "");
+  const backHref = `/dashboard/courses/${courseId}?tab=presentation`;
+
+  const defaultDate = presentation
+    ? new Date(presentation.presentationDate).toISOString().slice(0, 10)
+    : "";
+
+  function fmt(dateVal: Date | string) {
+    return new Date(dateVal).toLocaleDateString(undefined, {
+      year: "numeric", month: "long", day: "numeric",
+    });
+  }
+
+  return (
+    <div className="px-6 py-5">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">Presentation Details</p>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+        >
+          <Edit2 size={13} />
+          {presentation ? "Edit" : "Set Details"}
+        </button>
+      </div>
+
+      {showForm ? (
+        <Form method="post" preventScrollReset className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5">
+          <input type="hidden" name="intent" value="upsert-presentation" />
+          <input type="hidden" name="backHref" value={backHref} />
+          <h3 className="mb-4 text-sm font-bold text-slate-800">
+            {presentation ? "Edit Presentation" : "Set Presentation Details"}
+          </h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Presentation Title / Topic <span className="text-red-500">*</span>
+              </label>
+              <input
+                name="title"
+                type="text"
+                required
+                maxLength={200}
+                defaultValue={presentation?.title ?? ""}
+                placeholder="e.g. Database Normalization Overview"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Description / What to Cover <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                name="description"
+                required
+                maxLength={5000}
+                rows={4}
+                defaultValue={presentation?.description ?? ""}
+                placeholder="Topics, scope, key points to address…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Presentation Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                name="presentationDate"
+                type="date"
+                required
+                defaultValue={defaultDate}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Venue <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                name="venue"
+                type="text"
+                maxLength={200}
+                defaultValue={presentation?.venue ?? ""}
+                placeholder="e.g. Seminar Hall, Room 302"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Notes <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <textarea
+                name="notes"
+                maxLength={2000}
+                rows={2}
+                defaultValue={presentation?.notes ?? ""}
+                placeholder="Time limit, group members, special instructions…"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={isSubmitting && intent === "upsert-presentation"}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+            >
+              {isSubmitting && intent === "upsert-presentation" ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </Form>
+      ) : null}
+
+      {!presentation && !showForm ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <Monitor size={22} />
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-700">No presentation details yet</p>
+          <p className="mt-1 text-sm text-slate-400">Click "Set Details" to add presentation information.</p>
+        </div>
+      ) : presentation ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-4">
+              <div>
+                <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Title</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-800">{presentation.title}</p>
+              </div>
+              <div>
+                <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Date</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-800">{fmt(presentation.presentationDate)}</p>
+              </div>
+              {presentation.venue ? (
+                <div>
+                  <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Venue</p>
+                  <p className="mt-0.5 text-sm text-slate-700">{presentation.venue}</p>
+                </div>
+              ) : null}
+              <div>
+                <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Description</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{presentation.description}</p>
+              </div>
+              {presentation.notes ? (
+                <div>
+                  <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">Notes</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{presentation.notes}</p>
+                </div>
+              ) : null}
+            </div>
+            <Form method="post" preventScrollReset className="shrink-0">
+              <input type="hidden" name="intent" value="delete-presentation" />
+              <input type="hidden" name="backHref" value={backHref} />
+              <button
+                type="submit"
+                disabled={isSubmitting && intent === "delete-presentation"}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-60"
+                title="Remove presentation details"
+              >
+                <Trash2 size={15} />
+              </button>
+            </Form>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function StorageTab({
   courseId,
   storagePath,
@@ -1961,7 +2198,7 @@ function InfoRow({
 }
 
 export default function CourseDetailPage() {
-  const { course, backHref, viewerId, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks } =
+  const { course, backHref, viewerId, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks, presentation } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1969,9 +2206,9 @@ export default function CourseDetailPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const isOwner = viewerId === course.ownerId;
 
-  type Tab = "information" | "links" | "storage" | "quiz" | "assignment" | "mid" | "final";
+  type Tab = "information" | "links" | "storage" | "quiz" | "assignment" | "mid" | "final" | "presentation";
   const rawTab = searchParams.get("tab") ?? "information";
-  const validTabs: Tab[] = ["links", "storage", "quiz", "assignment", "mid", "final"];
+  const validTabs: Tab[] = ["links", "storage", "quiz", "assignment", "mid", "final", "presentation"];
   const activeTab: Tab = (validTabs.includes(rawTab as Tab) ? rawTab : "information") as Tab;
 
   const isSubmitting = navigation.state === "submitting";
@@ -2086,6 +2323,7 @@ export default function CourseDetailPage() {
               { key: "assignment", icon: FileText, label: "Assignment" },
               { key: "mid", icon: BookMarked, label: "Mid" },
               { key: "final", icon: GraduationCap, label: "Final" },
+              { key: "presentation", icon: Monitor, label: "Presentation" },
             ] as const
           ).map(({ key, icon: Icon, label }) => (
             <button
@@ -2203,6 +2441,15 @@ export default function CourseDetailPage() {
             courseId={course.id}
             kind="final"
             exam={finalExam as ExamEntry | null}
+            navigation={navigation}
+          />
+        ) : null}
+
+        {/* Tab: Presentation */}
+        {activeTab === "presentation" ? (
+          <PresentationTab
+            courseId={course.id}
+            presentation={presentation as PresentationEntry | null}
             navigation={navigation}
           />
         ) : null}

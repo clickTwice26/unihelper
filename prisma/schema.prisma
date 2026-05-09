@@ -115,6 +115,7 @@ model Course {
   assignments  Assignment[]
   midExam      MidExam?
   finalExam    FinalExam?
+  presentation Presentation?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -214,4 +215,17 @@ model Task {
 
   @@index([userId, status])
   @@index([userId, deadline])
+}
+
+model Presentation {
+  id               String   @id @default(cuid())
+  courseId         String   @unique
+  title            String
+  description      String   @db.Text
+  presentationDate DateTime
+  venue            String?
+  notes            String?  @db.Text
+  course           Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
