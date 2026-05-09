@@ -38,8 +38,9 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const fullName = String(formData.get("fullName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "").trim();
-  const confirmPassword = String(formData.get("confirmPassword") ?? "").trim();
+  // Do NOT trim passwords — whitespace may be intentional.
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
   if (!fullName || !email || !password || !confirmPassword) {
     return {

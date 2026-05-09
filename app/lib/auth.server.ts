@@ -68,6 +68,17 @@ export async function hashPassword(password: string) {
   return `${salt}:${derivedKey.toString("hex")}`;
 }
 
+/**
+ * Lazily computed dummy hash used to make the login path constant-time
+ * regardless of whether the queried email exists.  Computed once on first
+ * use and cached for the process lifetime.
+ */
+let _dummyHash: string | null = null;
+export async function getDummyHash() {
+  if (!_dummyHash) _dummyHash = await hashPassword("__dummy_constant_time__");
+  return _dummyHash;
+}
+
 export async function verifyPassword(password: string, passwordHash: string) {
   const [salt, storedHash] = passwordHash.split(":");
 

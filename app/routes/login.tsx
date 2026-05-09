@@ -33,10 +33,12 @@ export async function action({ request }: Route.ActionArgs) {
   // 10 attempts per 15 minutes per IP
   await rateLimit({ key: `login:${getClientIp(request)}`, limit: 10, windowSec: 900 });
 
-  const { createUserSession, findUserByEmail, verifyPassword } = await import("~/lib/auth.server");
+  const { createUserSession, findUserByEmail, verifyPassword, getDummyHash } = await import("~/lib/auth.server");
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "").trim();
+  // Do NOT trim passwords — whitespace may be intentional and trimming silently
+  // changes the credential, reducing effective keyspace.
+  const password = String(formData.get("password") ?? "");
 
   // Validate redirectTo is a relative path to prevent open-redirect attacks
   const rawRedirect = String(formData.get("redirectTo") ?? "").trim();
@@ -56,7 +58,13 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     const user = await findUserByEmail(email);
 
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    // Always call verifyPassword regardless of whether the user exists.
+    // This makes the response time constant and prevents username enumeration
+    // via timing side-channel (scrypt takes ~100 ms; skipping it is measurable).
+    const hashToVerify = user?.passwordHash ?? (await getDummyHash());
+    const passwordValid = await verifyPassword(password, hashToVerify);
+
+    if (!user || !passwordValid) {
       return {
         status: "error" as const,
         fields: { email },

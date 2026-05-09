@@ -29,8 +29,15 @@ async function timeCheck(check: () => Promise<void>): Promise<DependencyStatus> 
   } catch (error) {
     return {
       latencyMs: Math.round(performance.now() - startedAt),
-      status: "error",
-      error: error instanceof Error ? error.message : "Unknown dependency failure",
+      status: "error" as const,
+      // Strip raw error messages in production to avoid leaking internal details
+      // (connection strings, hostnames, etc.) to unauthenticated callers.
+      error:
+        process.env.NODE_ENV === "production"
+          ? "Dependency check failed"
+          : error instanceof Error
+            ? error.message
+            : "Unknown dependency failure",
     };
   }
 }
@@ -38,7 +45,7 @@ async function timeCheck(check: () => Promise<void>): Promise<DependencyStatus> 
 export async function getReadinessReport(): Promise<ReadinessReport> {
   const [postgres, redisCheck] = await Promise.all([
     timeCheck(async () => {
-      await db.$queryRawUnsafe("SELECT 1");
+      await db.$queryRaw`SELECT 1`;
     }),
     timeCheck(async () => {
       if (redis.status !== "ready") {

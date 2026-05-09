@@ -18,7 +18,6 @@ export async function loader() {
 
   return {
     appName: env.APP_NAME,
-    environment: env.NODE_ENV,
     services: [
       "React Router framework mode for Remix-style full-stack routing",
       "Prisma ORM with PostgreSQL as the system of record",
@@ -60,10 +59,6 @@ export default function Home() {
           <section id="runtime" className="surface-panel scroll-mt-28 p-6">
             <p className="eyebrow">Runtime</p>
             <dl className="type-body-sm mt-5 space-y-4 text-slate-700">
-              <div className="metric-row">
-                <dt>Environment</dt>
-                <dd>{data.environment}</dd>
-              </div>
               <div className="metric-row">
                 <dt>Liveness probe</dt>
                 <dd>/health</dd>
