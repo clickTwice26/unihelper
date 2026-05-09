@@ -12,3 +12,4 @@
 
 # Prisma
 /prisma/dev.db*
+.github
