@@ -34,6 +34,41 @@ import {
 } from "lucide-react";
 
 import type { Route } from "./+types/course-detail";
+import { CustomSelect } from "~/components/ui/select";
+
+function QuizReorderSelect({
+  quizId,
+  serial,
+  idx,
+  quizCount,
+  courseId,
+}: {
+  quizId: string;
+  serial: number;
+  idx: number;
+  quizCount: number;
+  courseId: string;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const options = Array.from({ length: quizCount }, (_, i) => ({
+    value: String(i + 1),
+    label: `#${i + 1}`,
+  }));
+  return (
+    <Form method="post" preventScrollReset ref={formRef}>
+      <input type="hidden" name="intent" value="reorder-quiz" />
+      <input type="hidden" name="quizId" value={quizId} />
+      <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
+      <CustomSelect
+        name="newSerial"
+        defaultValue={String(serial || idx + 1)}
+        options={options}
+        onChange={() => formRef.current?.submit()}
+        className="!w-auto !rounded-full !border-0 !bg-indigo-100 !py-0.5 !px-2 !text-xs !font-bold !text-indigo-700 hover:!bg-indigo-200 !shadow-none"
+      />
+    </Form>
+  );
+}
 
 export function meta({ data }: Route.MetaArgs) {
   const title = (data as { course?: { title?: string } } | undefined)?.course?.title;
@@ -1227,22 +1262,13 @@ function QuizTab({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <Form method="post" preventScrollReset>
-                        <input type="hidden" name="intent" value="reorder-quiz" />
-                        <input type="hidden" name="quizId" value={quiz.id} />
-                        <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
-                        <select
-                          name="newSerial"
-                          defaultValue={quiz.serial || idx + 1}
-                          onChange={(e) => e.currentTarget.form?.submit()}
-                          className="shrink-0 cursor-pointer rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700 outline-none transition hover:bg-indigo-200 focus:ring-2 focus:ring-indigo-400"
-                          title="Change quiz number"
-                        >
-                          {Array.from({ length: quizzes.length }, (_, i) => (
-                            <option key={i + 1} value={i + 1}>#{i + 1}</option>
-                          ))}
-                        </select>
-                      </Form>
+                      <QuizReorderSelect
+                        quizId={quiz.id}
+                        serial={quiz.serial}
+                        idx={idx}
+                        quizCount={quizzes.length}
+                        courseId={courseId}
+                      />
                       <p className="truncate text-sm font-bold text-slate-800">{quiz.title}</p>
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">

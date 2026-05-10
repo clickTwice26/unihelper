@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   CheckSquare,
+  Wallet,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -42,6 +43,7 @@ const navItemsSimple: Array<{
   { label: "Calendar", to: "/dashboard/calendar", icon: CalendarDays, end: false },
   { label: "Routine", to: "/dashboard/routine", icon: LayoutGrid, end: false },
   { label: "Tasks", to: "/dashboard/tasks", icon: CheckSquare, end: false },
+  { label: "Expenses", to: "/dashboard/expenses", icon: Wallet, end: false },
 ];
 
 const footerItems: Array<{
@@ -64,6 +66,7 @@ export default function DashboardLayout() {
     if (pathname.startsWith("/dashboard/calendar")) return "Calendar";
     if (pathname.startsWith("/dashboard/routine")) return "Routine";
     if (pathname.startsWith("/dashboard/tasks")) return "Tasks";
+    if (pathname.startsWith("/dashboard/expenses")) return "Expenses";
     const segment = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   })();

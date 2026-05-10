@@ -35,6 +35,7 @@ model User {
   courses             Course[]
   classRoutines       ClassRoutine[]
   tasks               Task[]
+  expenses            Expense[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -228,4 +229,34 @@ model Presentation {
   course           Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// ── Expense Tracker ───────────────────────────────────────────────────────────
+
+enum ExpenseCategory {
+  FOOD
+  TRANSPORT
+  HOUSING
+  EDUCATION
+  HEALTH
+  ENTERTAINMENT
+  SHOPPING
+  UTILITIES
+  OTHER
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  userId      String
+  amount      Decimal         @db.Decimal(10, 2)
+  category    ExpenseCategory @default(OTHER)
+  description String
+  date        DateTime
+  notes       String?         @db.Text
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, category])
 }
