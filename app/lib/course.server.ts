@@ -27,14 +27,27 @@ export async function canAccessCourses(
   return connection !== null;
 }
 
-export async function getCourses(viewerId: string, ownerId: string) {
+export const COURSES_PAGE_SIZE = 20;
+
+export async function getCourses(
+  viewerId: string,
+  ownerId: string,
+  page = 0,
+): Promise<{ courses: Awaited<ReturnType<typeof db.course.findMany>>; totalCount: number }> {
   if (!(await canAccessCourses(viewerId, ownerId))) {
     throw new Error("FORBIDDEN");
   }
-  return db.course.findMany({
-    where: { ownerId, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-  });
+  const where = { ownerId, deletedAt: null };
+  const [courses, totalCount] = await Promise.all([
+    db.course.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: page * COURSES_PAGE_SIZE,
+      take: COURSES_PAGE_SIZE,
+    }),
+    db.course.count({ where }),
+  ]);
+  return { courses, totalCount };
 }
 
 export async function createCourse(

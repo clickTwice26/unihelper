@@ -22,4 +22,4 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/react-router.config.ts ./react-router.config.ts
 EXPOSE 3000
 USER node
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

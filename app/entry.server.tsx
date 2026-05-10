@@ -1,4 +1,5 @@
 import { PassThrough } from "node:stream";
+import { randomBytes } from "node:crypto";
 
 import type { AppLoadContext, EntryContext } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
@@ -27,6 +28,8 @@ export default function handleRequest(
     });
   }
 
+  const nonce = randomBytes(16).toString("base64");
+
   return new Promise((resolve, reject) => {
     let shellRendered = false;
     let userAgent = request.headers.get("user-agent");
@@ -46,7 +49,7 @@ export default function handleRequest(
     );
 
     const { pipe, abort } = renderToPipeableStream(
-      <ServerRouter context={routerContext} url={request.url} />,
+      <ServerRouter context={routerContext} url={request.url} nonce={nonce} />,
       {
         [readyOption]() {
           shellRendered = true;
@@ -93,10 +96,8 @@ export default function handleRequest(
             "Content-Security-Policy",
             [
               "default-src 'self'",
-              // React Router emits inline hydration/runtime scripts. Without a
-              // nonce-based CSP, allowing inline scripts here is required for
-              // the app to hydrate and client-side interactions to work.
-              "script-src 'self' 'unsafe-inline'",
+              // React Router passes this nonce to its inline hydration scripts.
+              `script-src 'self' 'nonce-${nonce}'`,
               // Tailwind inlines style attributes; Google Fonts needs style-src
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",

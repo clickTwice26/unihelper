@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Form, Link, useLoaderData, useNavigation } from "react-router";
+import { Form, Link, useLoaderData, useNavigation, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   Mail,
   Phone,
   Plus,
@@ -38,7 +40,7 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const { getAuthenticatedUser } = await import("~/lib/auth.server");
   const { redirect } = await import("react-router");
-  const { getCourses, canAccessCourses } = await import("~/lib/course.server");
+  const { getCourses, canAccessCourses, COURSES_PAGE_SIZE } = await import("~/lib/course.server");
   const { db } = await import("~/lib/db.server");
 
   const session = await getAuthenticatedUser(request);
@@ -69,14 +71,19 @@ export async function loader({ request }: Route.LoaderArgs) {
     isViewingBuddy = true;
   }
 
+  const rawPage = parseInt(url.searchParams.get("page") ?? "0", 10);
+  const page = isNaN(rawPage) || rawPage < 0 ? 0 : rawPage;
+
   const { cached } = await import("~/lib/cache.server");
-  const courses = await cached(
-    `courses:${ownerId}`,
+  const { courses, totalCount } = await cached(
+    `courses:${ownerId}:p${page}`,
     30,
-    () => getCourses(session.id, ownerId),
+    () => getCourses(session.id, ownerId, page),
   );
 
-  return { courses, ownerId, ownerName, isViewingBuddy };
+  const totalPages = Math.max(1, Math.ceil(totalCount / COURSES_PAGE_SIZE));
+
+  return { courses, ownerId, ownerName, isViewingBuddy, page, totalPages, totalCount };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -131,10 +138,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "delete") {
     const courseId = String(formData.get("courseId") ?? "").trim();
     if (!courseId) throw await flash("error", "Missing course ID.");
-    const { invalidateCache } = await import("~/lib/cache.server");
+    const { invalidateCachePattern } = await import("~/lib/cache.server");
     try {
       await deleteCourse(session.id, courseId);
-      await invalidateCache(`courses:${session.id}`);
+      await invalidateCachePattern(`courses:${session.id}:*`);
       throw await flash("success", "Course deleted.");
     } catch (err) {
       if (err instanceof Response) throw err;
@@ -202,10 +209,10 @@ export async function action({ request }: Route.ActionArgs) {
 
   // ── Create ───────────────────────────────────────────────────────────────
   if (intent === "create") {
-    const { invalidateCache } = await import("~/lib/cache.server");
+    const { invalidateCachePattern } = await import("~/lib/cache.server");
     try {
       await createCourse(session.id, ownerId, data);
-      await invalidateCache(`courses:${ownerId}`);
+      await invalidateCachePattern(`courses:${ownerId}:*`);
       throw await flash("success", "Course added.");
     } catch (err) {
       if (err instanceof Response) throw err;
@@ -219,10 +226,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "update") {
     const courseId = String(formData.get("courseId") ?? "").trim();
     if (!courseId) throw await flash("error", "Missing course ID.");
-    const { invalidateCache } = await import("~/lib/cache.server");
+    const { invalidateCachePattern } = await import("~/lib/cache.server");
     try {
       await updateCourse(session.id, courseId, data);
-      await invalidateCache(`courses:${ownerId}`);
+      await invalidateCachePattern(`courses:${ownerId}:*`);
       throw await flash("success", "Course updated.");
     } catch (err) {
       if (err instanceof Response) throw err;
@@ -517,9 +524,10 @@ function CourseModal({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CoursesPage() {
-  const { courses, ownerId, ownerName, isViewingBuddy } =
+  const { courses, ownerId, ownerName, isViewingBuddy, page, totalPages, totalCount } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [modalState, setModalState] = useState<ModalState>({ mode: "closed" });
 
@@ -541,6 +549,18 @@ export default function CoursesPage() {
     ? `${ownerName?.trim() || "Buddy"}'s Courses`
     : "My Courses";
 
+  function goToPage(p: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (p === 0) next.delete("page");
+        else next.set("page", String(p));
+        return next;
+      },
+      { preventScrollReset: true },
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Action row */}
@@ -555,9 +575,9 @@ export default function CoursesPage() {
           </Link>
         ) : (
           <p className="text-sm text-slate-500">
-            {courses.length === 0
+            {totalCount === 0
               ? "No courses yet."
-              : `${courses.length} course${courses.length !== 1 ? "s" : ""}`}
+              : `${totalCount} course${totalCount !== 1 ? "s" : ""}`}
           </p>
         )}
         <button
@@ -571,7 +591,7 @@ export default function CoursesPage() {
       </div>
 
       {/* Empty state */}
-      {courses.length === 0 ? (
+      {totalCount === 0 ? (
         <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border border-slate-200 bg-white py-24 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
             <BookOpen size={24} className="text-slate-400" />
@@ -584,15 +604,44 @@ export default function CoursesPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => (
-            <CourseCard
-              key={course.id}
-              course={course}
-              ownerId={ownerId}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {courses.map((course) => (
+              <CourseCard
+                key={course.id}
+                course={course}
+                ownerId={ownerId}
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 ? (
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                disabled={page === 0}
+                onClick={() => goToPage(page - 1)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </button>
+              <span className="text-sm text-slate-500">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages - 1}
+                onClick={() => goToPage(page + 1)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
 
       {/* Modal */}

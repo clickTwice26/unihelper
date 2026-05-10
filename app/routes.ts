@@ -9,7 +9,7 @@ export default [
     route("dashboard/profile", "routes/dashboard/profile.tsx"),
     route("dashboard/social", "routes/dashboard/social.tsx"),
     route("dashboard/courses", "routes/dashboard/courses.tsx"),
-    route("dashboard/courses/:courseId", "routes/dashboard/course-detail.tsx"),
+    route("dashboard/courses/:courseId", "routes/dashboard/course-detail/index.tsx"),
     route("dashboard/courses/:courseId/files/:fileId", "routes/dashboard/course-file.tsx"),
     route("dashboard/calendar", "routes/dashboard/calendar.tsx"),
     route("dashboard/routine", "routes/dashboard/routine.tsx"),
