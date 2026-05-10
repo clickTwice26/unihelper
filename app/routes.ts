@@ -20,6 +20,7 @@ export default [
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),
   route("logout", "routes/logout.tsx"),
+  route("api/search", "routes/api.search.ts"),
   route("health", "routes/health.ts"),
   route("ready", "routes/ready.ts"),
   // Catch-all: renders the 404 page for any unregistered URL

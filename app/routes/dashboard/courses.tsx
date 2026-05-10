@@ -3,12 +3,9 @@ import { Form, Link, useLoaderData, useNavigation } from "react-router";
 import {
   ArrowLeft,
   BookOpen,
-  Edit2,
-  Eye,
   Mail,
   Phone,
   Plus,
-  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -233,57 +230,32 @@ export async function action({ request }: Route.ActionArgs) {
 
 function CourseCard({
   course,
-  isDeleting,
-  deleteConfirm,
-  onEdit,
-  onDeleteRequest,
-  onDeleteCancel,
   ownerId,
 }: {
   course: Course;
-  isDeleting: boolean;
-  deleteConfirm: boolean;
-  onEdit: () => void;
-  onDeleteRequest: () => void;
-  onDeleteCancel: () => void;
   ownerId: string;
 }) {
+  const href = `/dashboard/courses/${course.id}${
+    ownerId !== course.ownerId ? `?view=${course.ownerId}` : ""
+  }`;
+
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+    <Link
+      to={href}
+      className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md hover:border-indigo-200"
+    >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-            <BookOpen size={18} />
-          </div>
-          <div className="min-w-0">
-            <h3 className="break-words text-sm font-semibold leading-snug text-slate-900">
-              {course.title}
-            </h3>
-            <span className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[0.72rem] font-medium text-slate-600">
-              {course.creditHours} credit{course.creditHours !== 1 ? "s" : ""}
-            </span>
-          </div>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+          <BookOpen size={18} />
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            title="Edit course"
-          >
-            <Edit2 size={15} />
-          </button>
-          {!deleteConfirm ? (
-            <button
-              type="button"
-              onClick={onDeleteRequest}
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-              title="Delete course"
-            >
-              <Trash2 size={15} />
-            </button>
-          ) : null}
+        <div className="min-w-0">
+          <h3 className="break-words text-sm font-semibold leading-snug text-slate-900">
+            {course.title}
+          </h3>
+          <span className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[0.72rem] font-medium text-slate-600">
+            {course.creditHours} credit{course.creditHours !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
 
@@ -296,23 +268,13 @@ function CourseCard({
         {course.teacherEmail ? (
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Mail size={14} className="shrink-0 text-slate-400" />
-            <a
-              href={`mailto:${course.teacherEmail}`}
-              className="truncate transition-colors hover:text-indigo-600"
-            >
-              {course.teacherEmail}
-            </a>
+            <span className="truncate">{course.teacherEmail}</span>
           </div>
         ) : null}
         {course.teacherPhone ? (
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Phone size={14} className="shrink-0 text-slate-400" />
-            <a
-              href={`tel:${course.teacherPhone}`}
-              className="transition-colors hover:text-indigo-600"
-            >
-              {course.teacherPhone}
-            </a>
+            <span>{course.teacherPhone}</span>
           </div>
         ) : null}
         {course.teacherInfo ? (
@@ -321,47 +283,7 @@ function CourseCard({
           </p>
         ) : null}
       </div>
-
-      {/* View button */}
-      <div className="border-t border-slate-100 pt-3">
-        <Link
-          to={`/dashboard/courses/${course.id}${ownerId !== course.ownerId ? `?view=${course.ownerId}` : ""}`}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-        >
-          <Eye size={13} />
-          View
-        </Link>
-      </div>
-
-      {/* Delete confirm */}
-      {deleteConfirm ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
-          <p className="text-xs font-medium text-red-700">Delete this course?</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onDeleteCancel}
-              disabled={isDeleting}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <Form method="post" preventScrollReset>
-              <input type="hidden" name="intent" value="delete" />
-              <input type="hidden" name="courseId" value={course.id} />
-              <input type="hidden" name="ownerId" value={ownerId} />
-              <button
-                type="submit"
-                disabled={isDeleting}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-              >
-                {isDeleting ? "Deleting…" : "Delete"}
-              </button>
-            </Form>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </Link>
   );
 }
 
@@ -589,13 +511,8 @@ export default function CoursesPage() {
   const navigation = useNavigation();
 
   const [modalState, setModalState] = useState<ModalState>({ mode: "closed" });
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const isSubmitting = navigation.state === "submitting";
-  const submittingIntent = String(navigation.formData?.get("intent") ?? "");
-  const submittingCourseId = String(
-    navigation.formData?.get("courseId") ?? "",
-  );
 
   // Close modal after a successful mutation (nav goes submitting → loading)
   const prevNavState = useRef(navigation.state);
@@ -605,7 +522,6 @@ export default function CoursesPage() {
       navigation.state === "loading"
     ) {
       setModalState({ mode: "closed" });
-      setDeleteConfirmId(null);
     }
     prevNavState.current = navigation.state;
   }, [navigation.state]);
@@ -663,15 +579,6 @@ export default function CoursesPage() {
               key={course.id}
               course={course}
               ownerId={ownerId}
-              isDeleting={
-                isSubmitting &&
-                submittingIntent === "delete" &&
-                submittingCourseId === course.id
-              }
-              deleteConfirm={deleteConfirmId === course.id}
-              onEdit={() => setModalState({ mode: "edit", course })}
-              onDeleteRequest={() => setDeleteConfirmId(course.id)}
-              onDeleteCancel={() => setDeleteConfirmId(null)}
             />
           ))}
         </div>

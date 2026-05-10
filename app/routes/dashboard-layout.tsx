@@ -1,5 +1,5 @@
 import { type CSSProperties, type ComponentType, useEffect, useRef, useState } from "react";
-import { Form, Link, NavLink, Outlet, redirect, useLoaderData, useLocation } from "react-router";
+import { Form, Link, NavLink, Outlet, redirect, useFetcher, useLoaderData, useLocation, useNavigate } from "react-router";
 import {
   Search,
   LayoutDashboard,
@@ -8,7 +8,6 @@ import {
   Wallet,
   LogOut,
   ChevronLeft,
-  ChevronRight,
   Bell,
   BookOpen,
   CalendarDays,
@@ -16,9 +15,194 @@ import {
   Menu,
   X,
   HeartPulse,
+  FileText,
+  Loader2,
 } from "lucide-react";
 
 import type { Route } from "./+types/dashboard-layout";
+
+// ── Global Search ─────────────────────────────────────────────────────────────
+
+type SearchResult = {
+  id: string;
+  type: "course" | "file" | "task" | "routine";
+  title: string;
+  subtitle: string;
+  href: string;
+  ownerLabel: string | null;
+};
+
+const SEARCH_TYPE_CONFIG: Record<
+  SearchResult["type"],
+  { label: string; icon: ComponentType<{ size?: number; className?: string }> }
+> = {
+  course:  { label: "Courses",          icon: BookOpen   },
+  file:    { label: "Files & Storage",  icon: FileText   },
+  task:    { label: "Tasks",            icon: CheckSquare },
+  routine: { label: "Routine",          icon: LayoutGrid },
+};
+
+function groupSearchResults(results: SearchResult[]) {
+  const order: SearchResult["type"][] = ["course", "file", "task", "routine"];
+  const map = new Map<string, SearchResult[]>();
+  for (const r of results) {
+    const arr = map.get(r.type) ?? [];
+    arr.push(r);
+    map.set(r.type, arr);
+  }
+  return order
+    .filter((t) => map.has(t))
+    .map((t) => ({ type: t, ...SEARCH_TYPE_CONFIG[t], items: map.get(t)! }));
+}
+
+function GlobalSearch() {
+  const fetcher = useFetcher<SearchResult[]>();
+  const navigate = useNavigate();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+
+  const trimmed = query.trim();
+  const hasQuery = trimmed.length >= 2;
+  const isSearching = fetcher.state !== "idle";
+  const results: SearchResult[] = hasQuery && Array.isArray(fetcher.data) ? fetcher.data : [];
+  const showDropdown = open && hasQuery;
+
+  // Debounced search — fire 280ms after the user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!hasQuery) { setOpen(false); return; }
+    debounceRef.current = setTimeout(() => {
+      fetcher.load(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      setOpen(true);
+      setActiveIdx(-1);
+    }, 280);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!showDropdown) return;
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showDropdown]);
+
+  // ⌘K / Ctrl+K to focus
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    }
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); return; }
+    if (!showDropdown || results.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && activeIdx >= 0) {
+      e.preventDefault();
+      const r = results[activeIdx];
+      if (r) { navigate(r.href); setOpen(false); setQuery(""); }
+    }
+  }
+
+  const grouped = groupSearchResults(results);
+
+  return (
+    <div ref={containerRef} className="hidden sm:flex flex-1 max-w-sm mx-6 relative">
+      <div className="relative w-full">
+        {isSearching ? (
+          <Loader2 size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 animate-spin pointer-events-none" />
+        ) : (
+          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          onFocus={() => { if (hasQuery) setOpen(true); }}
+          placeholder="Search… (⌘K)"
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
+        />
+      </div>
+
+      {showDropdown && (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          {isSearching ? (
+            <div className="flex items-center gap-2 px-4 py-3 text-sm text-slate-400">
+              <Loader2 size={13} className="animate-spin" />
+              Searching…
+            </div>
+          ) : results.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-slate-400">
+              No results for{" "}
+              <span className="font-medium text-slate-600">"{trimmed}"</span>
+            </div>
+          ) : (
+            <div className="max-h-[70vh] overflow-y-auto py-1">
+              {grouped.map(({ type, label, icon: Icon, items }) => (
+                <div key={type}>
+                  <p className="px-3 pt-2.5 pb-1 text-[0.62rem] font-bold uppercase tracking-widest text-slate-400">
+                    {label}
+                  </p>
+                  {items.map((r) => {
+                    const flatIdx = results.indexOf(r);
+                    const isActive = flatIdx === activeIdx;
+                    return (
+                      <Link
+                        key={r.id}
+                        to={r.href}
+                        onClick={() => { setOpen(false); setQuery(""); }}
+                        className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
+                          isActive ? "bg-indigo-50" : "hover:bg-slate-50"
+                        }`}
+                      >
+                        <Icon size={14} className="shrink-0 text-slate-400" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-900">{r.title}</p>
+                          <p className="truncate text-xs text-slate-400">{r.subtitle}</p>
+                        </div>
+                        {r.ownerLabel ? (
+                          <span className="shrink-0 rounded-full border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[0.6rem] font-bold text-indigo-600">
+                            {r.ownerLabel}
+                          </span>
+                        ) : null}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { getAuthenticatedUser } = await import("~/lib/auth.server");
@@ -179,44 +363,6 @@ export default function DashboardLayout() {
           )}
         </div>
 
-        {/* Search Input Mock */}
-        <div className="px-4 mb-4 mt-2 shrink-0">
-            <div className={collapsed ? "lg:hidden" : ""}>
-             <div className="relative group">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="Search" 
-                  className="w-full bg-white border border-slate-300 rounded-lg py-2 pl-9 pr-3 text-[0.9rem] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
-                  <span className="hidden group-hover:flex items-center justify-center border border-slate-200 rounded px-1.5 py-0.5 text-[0.65rem] font-medium text-slate-400 bg-slate-50">⌘K</span>
-                </div>
-             </div>
-           </div>
-
-           {collapsed ? (
-             <div className="hidden lg:flex flex-col items-center gap-2">
-               <button
-                type="button"
-                className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"
-                onClick={() => setCollapsed(false)}
-                title="Search"
-               >
-                  <Search size={20} />
-               </button>
-               <button
-                type="button"
-                className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors"
-                onClick={() => setCollapsed(false)}
-                title="Expand sidebar"
-               >
-                  <ChevronRight size={18} />
-               </button>
-             </div>
-           ) : null}
-        </div>
-
         {/* Primary Nav List */}
         <nav className="flex-1 overflow-y-auto px-4 space-y-1 mt-2" aria-label="Dashboard navigation">
            {navItemsSimple.map((item) => (
@@ -285,26 +431,6 @@ export default function DashboardLayout() {
           ))}
         </div>
 
-        {/* Feature Card Mock (Used Space) */}
-        <div className={collapsed ? "lg:hidden px-4 mb-6" : "px-4 mb-6"}>
-          <div className="bg-slate-50 rounded-xl p-4 shadow-sm border border-slate-100 relative">
-             <div className="mb-3">
-                <span className="flex items-baseline gap-1 text-[0.9rem] font-semibold text-slate-900">
-                  Used space
-                </span>
-             </div>
-             <p className="text-[0.8rem] text-slate-500 mb-4 leading-tight">
-               Your team has used 80% of your available space. Need more?
-             </p>
-             {/* Progress bar */}
-             <div className="w-full bg-slate-200 rounded-full h-2 mb-4 overflow-hidden">
-               <div className="bg-indigo-600 h-2 rounded-full" style={{ width: '80%' }}></div>
-             </div>
-             <button className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg py-2 shadow-sm hover:bg-slate-50 transition-colors">
-                Upgrade plan
-             </button>
-          </div>
-        </div>
 
         {/* User Card Row */}
         <div className={`border-t border-slate-200 p-4 flex items-center gap-3 shrink-0 justify-between ${collapsed ? "lg:justify-center" : ""}`}>
@@ -343,6 +469,9 @@ export default function DashboardLayout() {
              </button>
              <span className="text-[1rem] font-semibold text-slate-800 tracking-tight sm:text-[1.1rem]">{pageTitle}</span>
           </div>
+
+          {/* Search bar */}
+          <GlobalSearch />
 
           <div className="flex items-center gap-3 sm:gap-4">
             <button className="text-slate-500 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-md transition-colors" aria-label="Notifications">
