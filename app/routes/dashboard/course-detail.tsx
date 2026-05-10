@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Form, Link, useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import {
   ArrowLeft,
@@ -731,16 +731,16 @@ function parseBreadcrumbs(path: string) {
   return crumbs;
 }
 
-function MimeIcon({ mimeType }: { mimeType: string | null }) {
-  if (!mimeType) return <File size={18} className="text-slate-400" />;
-  if (mimeType.startsWith("image/")) return <File size={18} className="text-emerald-500" />;
-  if (mimeType === "application/pdf") return <File size={18} className="text-red-500" />;
-  if (mimeType.includes("word") || mimeType.includes("document")) return <File size={18} className="text-blue-500" />;
-  if (mimeType.includes("sheet") || mimeType.includes("excel")) return <File size={18} className="text-green-500" />;
-  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return <File size={18} className="text-orange-500" />;
-  if (mimeType.startsWith("video/")) return <File size={18} className="text-purple-500" />;
-  if (mimeType.startsWith("audio/")) return <File size={18} className="text-pink-500" />;
-  return <File size={18} className="text-slate-400" />;
+function MimeIcon({ mimeType, size = 18 }: { mimeType: string | null; size?: number }) {
+  if (!mimeType) return <File size={size} className="text-slate-400" />;
+  if (mimeType.startsWith("image/")) return <File size={size} className="text-emerald-500" />;
+  if (mimeType === "application/pdf") return <File size={size} className="text-red-500" />;
+  if (mimeType.includes("word") || mimeType.includes("document")) return <File size={size} className="text-blue-500" />;
+  if (mimeType.includes("sheet") || mimeType.includes("excel")) return <File size={size} className="text-green-500" />;
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return <File size={size} className="text-orange-500" />;
+  if (mimeType.startsWith("video/")) return <File size={size} className="text-purple-500" />;
+  if (mimeType.startsWith("audio/")) return <File size={size} className="text-pink-500" />;
+  return <File size={size} className="text-slate-400" />;
 }
 
 function NewFolderModal({
@@ -1864,6 +1864,17 @@ function StorageTab({
   const [uploadFileName, setUploadFileName] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const wasCreatingFolder = useRef(false);
+
+  useEffect(() => {
+    if (navigation.state === "submitting" && String(navigation.formData?.get("intent") ?? "") === "create-folder") {
+      wasCreatingFolder.current = true;
+    }
+    if (navigation.state === "idle" && wasCreatingFolder.current) {
+      wasCreatingFolder.current = false;
+      setShowNewFolder(false);
+    }
+  }, [navigation.state]);
 
   function copyShareLink(item: StorageFile) {
     const encodedKey = item.key.split("/").map(encodeURIComponent).join("/");
@@ -2039,7 +2050,7 @@ function StorageTab({
         </div>
       </div>
 
-      {/* File list */}
+      {/* File grid */}
       {storageFiles.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-300">
@@ -2049,133 +2060,135 @@ function StorageTab({
           <p className="mt-1 text-xs text-slate-400">Upload files or create a folder to get started.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-left">
-                <th className="px-4 py-2.5 text-xs font-semibold text-slate-500">Name</th>
-                <th className="hidden px-4 py-2.5 text-xs font-semibold text-slate-500 sm:table-cell">Size</th>
-                <th className="hidden px-4 py-2.5 text-xs font-semibold text-slate-500 md:table-cell">Added</th>
-                <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {storageFiles.map((item) => {
-                const isDeleting =
-                  isSubmitting && submittingIntent === "delete-file" && submittingFileId === item.id;
-                const confirmingDelete = deleteConfirmId === item.id;
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {storageFiles.map((item) => {
+            const isDeleting = isSubmitting && submittingIntent === "delete-file" && submittingFileId === item.id;
+            const confirmingDelete = deleteConfirmId === item.id;
+            const dateStr = new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-                return (
-                  <tr key={item.id} className="group transition-colors hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        {item.isFolder ? (
-                          <FolderOpen size={18} className="shrink-0 text-amber-400" />
-                        ) : (
-                          <MimeIcon mimeType={item.mimeType} />
-                        )}
-                        {item.isFolder ? (
-                          <button
-                            type="button"
-                            onClick={() => navigateTo(`${storagePath}${item.name}/`)}
-                            className="truncate font-medium text-slate-800 transition-colors hover:text-indigo-600"
-                          >
-                            {item.name}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewItem(item)}
-                            className="truncate text-left font-medium text-slate-800 transition-colors hover:text-indigo-600"
-                          >
-                            {item.name}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">
-                      {item.isFolder ? "—" : formatBytes(item.size)}
-                    </td>
-                    <td className="hidden px-4 py-3 text-slate-500 md:table-cell">
-                      {new Date(item.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-4 py-3">
-                      {confirmingDelete ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="text-xs font-medium text-red-600">Delete?</span>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                          >
-                            No
-                          </button>
-                          <Form method="post" preventScrollReset>
-                            <input type="hidden" name="intent" value="delete-file" />
-                            <input type="hidden" name="fileId" value={item.id} />
-                            <input type="hidden" name="backHref" value={storageBackHref} />
-                            <button
-                              type="submit"
-                              disabled={isDeleting}
-                              className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-                            >
-                              {isDeleting ? "…" : "Yes"}
-                            </button>
-                          </Form>
-                        </div>
+            return (
+              <div
+                key={item.id}
+                className="group relative flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-4 text-center transition hover:border-indigo-200 hover:shadow-md"
+              >
+                {/* Clickable icon / thumbnail */}
+                {(() => {
+                  const isImage = item.mimeType?.startsWith("image/");
+                  const thumbUrl = isImage
+                    ? `${r2PublicUrl}/${item.key.split("/").map(encodeURIComponent).join("/")}`
+                    : null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        item.isFolder
+                          ? navigateTo(`${storagePath}${item.name}/`)
+                          : setPreviewItem(item)
+                      }
+                      className={`overflow-hidden rounded-2xl transition group-hover:ring-2 group-hover:ring-indigo-300 ${
+                        thumbUrl ? "h-24 w-full" : "flex h-16 w-16 items-center justify-center bg-slate-50 group-hover:bg-indigo-50"
+                      }`}
+                    >
+                      {thumbUrl ? (
+                        <img
+                          src={thumbUrl}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : item.isFolder ? (
+                        <FolderOpen size={34} className="text-amber-400" />
                       ) : (
-                        <div className="flex items-center justify-end gap-1">
-                          {!item.isFolder && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewItem(item)}
-                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-indigo-600"
-                                title="Preview"
-                              >
-                                <Eye size={15} />
-                              </button>
-                              <a
-                                href={`/dashboard/courses/${courseId}/files/${item.id}?download=1`}
-                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                                title="Download"
-                              >
-                                <Download size={15} />
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => copyShareLink(item)}
-                                className={`rounded-lg p-1.5 transition ${
-                                  copiedId === item.id
-                                    ? "text-green-600"
-                                    : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                                }`}
-                                title={copiedId === item.id ? "Copied!" : "Copy shareable link"}
-                              >
-                                {copiedId === item.id ? <Check size={15} /> : <Copy size={15} />}
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmId(item.id)}
-                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-                            title="Delete"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
+                        <MimeIcon mimeType={item.mimeType} size={30} />
                       )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </button>
+                  );
+                })()}
+
+                {/* Name */}
+                <p className="mt-2.5 w-full truncate text-xs font-semibold text-slate-800" title={item.name}>
+                  {item.name}
+                </p>
+
+                {/* Meta */}
+                <p className="mt-0.5 text-[10px] text-slate-400">
+                  {item.isFolder ? "Folder" : formatBytes(item.size)}
+                </p>
+                <p className="text-[10px] text-slate-300">{dateStr}</p>
+
+                {/* Hover action bar */}
+                {!confirmingDelete && (
+                  <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    {!item.isFolder && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewItem(item)}
+                          className="rounded-lg bg-white p-1 shadow-sm border border-slate-100 text-slate-400 transition hover:text-indigo-600"
+                          title="Preview"
+                        >
+                          <Eye size={13} />
+                        </button>
+                        <a
+                          href={`/dashboard/courses/${courseId}/files/${item.id}?download=1`}
+                          className="rounded-lg bg-white p-1 shadow-sm border border-slate-100 text-slate-400 transition hover:text-slate-700 flex items-center justify-center"
+                          title="Download"
+                        >
+                          <Download size={13} />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => copyShareLink(item)}
+                          className={`rounded-lg bg-white p-1 shadow-sm border border-slate-100 transition ${
+                            copiedId === item.id ? "text-green-600" : "text-slate-400 hover:text-slate-700"
+                          }`}
+                          title={copiedId === item.id ? "Copied!" : "Copy link"}
+                        >
+                          {copiedId === item.id ? <Check size={13} /> : <Copy size={13} />}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmId(item.id)}
+                      className="rounded-lg bg-white p-1 shadow-sm border border-slate-100 text-slate-400 transition hover:text-red-600"
+                      title="Delete"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Delete confirm overlay */}
+                {confirmingDelete && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/95 p-3">
+                    <p className="text-xs font-semibold text-red-600">Delete?</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmId(null)}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        No
+                      </button>
+                      <Form method="post" preventScrollReset>
+                        <input type="hidden" name="intent" value="delete-file" />
+                        <input type="hidden" name="fileId" value={item.id} />
+                        <input type="hidden" name="backHref" value={storageBackHref} />
+                        <button
+                          type="submit"
+                          disabled={isDeleting}
+                          className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+                        >
+                          {isDeleting ? "…" : "Yes"}
+                        </button>
+                      </Form>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

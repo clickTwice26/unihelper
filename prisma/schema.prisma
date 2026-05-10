@@ -247,9 +247,15 @@ enum ExpenseCategory {
   OTHER
 }
 
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
 model Expense {
   id          String          @id @default(cuid())
   userId      String
+  type        TransactionType @default(EXPENSE)
   amount      Decimal         @db.Decimal(10, 2)
   category    ExpenseCategory @default(OTHER)
   description String
@@ -261,6 +267,7 @@ model Expense {
 
   @@index([userId, date])
   @@index([userId, category])
+  @@index([userId, type])
 }
 
 // ── Health Tracker ────────────────────────────────────────────────────────────

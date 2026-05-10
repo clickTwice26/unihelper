@@ -320,35 +320,40 @@ function AddWeightModal({ open, onClose, today }: { open: boolean; onClose: () =
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <div className="relative flex w-full max-w-sm flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 max-h-[calc(100svh-2rem)]">
+        {/* Header — sticky */}
+        <div className="flex shrink-0 items-center justify-between rounded-t-2xl border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50"><Scale size={16} className="text-indigo-600" /></div>
             <h2 className="text-sm font-bold text-slate-900">Log Weight</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X size={16} /></button>
         </div>
-        <Form method="post" ref={formRef} className="px-5 py-5 space-y-4">
+        {/* Scrollable body */}
+        <Form method="post" ref={formRef} className="flex min-h-0 flex-col">
           <input type="hidden" name="intent" value="add-weight" />
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Weight (kg) <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <input ref={inputRef} name="weight" type="number" min="20" max="500" step="0.1" placeholder="70.0" required
-                className="w-full rounded-lg border border-slate-300 py-2 pr-10 pl-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">kg</span>
+          <div className="overflow-y-auto px-5 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Weight (kg) <span className="text-red-500">*</span></label>
+              <div className="relative">
+                <input ref={inputRef} name="weight" type="number" min="20" max="500" step="0.1" placeholder="70.0" required
+                  className="w-full rounded-lg border border-slate-300 py-2 pr-10 pl-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">kg</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Date <span className="text-red-500">*</span></label>
+              <input name="date" type="date" defaultValue={today} required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Notes <span className="text-slate-400 font-normal">(optional)</span></label>
+              <textarea name="notes" rows={2} maxLength={1000} placeholder="How are you feeling?"
+                className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Date <span className="text-red-500">*</span></label>
-            <input name="date" type="date" defaultValue={today} required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Notes <span className="text-slate-400 font-normal">(optional)</span></label>
-            <textarea name="notes" rows={2} maxLength={1000} placeholder="How are you feeling?"
-              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-          </div>
-          <div className="flex gap-3 pt-1">
+          {/* Footer — sticky */}
+          <div className="flex shrink-0 gap-3 rounded-b-2xl border-t border-slate-100 bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
             <button type="submit" disabled={submitting} className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
               {submitting ? "Logging…" : "Log Weight"}
@@ -417,15 +422,18 @@ function AddDietModal({ open, onClose, today, pastDescriptions }: { open: boolea
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <div className="relative flex w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 max-h-[calc(100svh-2rem)]">
+        {/* Header — sticky */}
+        <div className="flex shrink-0 items-center justify-between rounded-t-2xl border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50"><UtensilsCrossed size={16} className="text-emerald-600" /></div>
             <h2 className="text-sm font-bold text-slate-900">Log Meal</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X size={16} /></button>
         </div>
-        <Form method="post" ref={formRef} className="px-5 py-5 space-y-4">
+        {/* Scrollable body */}
+        <Form method="post" ref={formRef} className="flex min-h-0 flex-col">
+        <div className="overflow-y-auto px-5 py-5 space-y-4">
           <input type="hidden" name="intent" value="add-diet" />
           <div className="relative">
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">What did you eat? <span className="text-red-500">*</span></label>
@@ -498,7 +506,9 @@ function AddDietModal({ open, onClose, today, pastDescriptions }: { open: boolea
             <textarea name="notes" rows={2} maxLength={1000} placeholder="Any thoughts about this meal…"
               className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
           </div>
-          <div className="flex gap-3 pt-1">
+        </div>
+          {/* Footer — sticky */}
+          <div className="flex shrink-0 gap-3 rounded-b-2xl border-t border-slate-100 bg-white px-5 py-4">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
             <button type="submit" disabled={submitting} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
               {submitting ? "Logging…" : "Log Meal"}
