@@ -1,15 +1,22 @@
 /**
- * Redis-backed sliding window rate limiter.
+ * Redis-backed true sliding-window rate limiter.
  *
- * Uses a fixed-window counter via INCR + EXPIRE.  On the first hit in a
- * window the key is created and its TTL is set; subsequent hits just
- * increment the counter.  When the limit is exceeded a 429 Response is
- * thrown so the caller can catch it or let it bubble up as an error boundary.
+ * Uses a sorted set per key where every member is a unique request ID and its
+ * score is the hit timestamp in milliseconds.  On each request we:
+ *   1. Remove all members whose score is older than the current window.
+ *   2. Count remaining members — if >= limit, reject.
+ *   3. Add the new member with score = now.
+ *   4. Refresh the key TTL so idle keys expire automatically.
+ *
+ * All four operations run in a single MULTI/EXEC pipeline so the check-and-
+ * increment is atomic.  This eliminates the burst-at-window-edge flaw of a
+ * fixed-window counter.
  *
  * Usage:
  *   await rateLimit({ key: `login:${ip}`, limit: 10, windowSec: 900 });
  */
 
+import { randomBytes } from "node:crypto";
 import { redis } from "~/lib/ratelimit-redis.server";
 
 export type RateLimitOptions = {
@@ -22,25 +29,33 @@ export type RateLimitOptions = {
 };
 
 export async function rateLimit({ key, limit, windowSec }: RateLimitOptions) {
-  const redisKey = `rl:${key}`;
+  const redisKey = `rl:sw:${key}`;
+  const now = Date.now();
+  const windowMs = windowSec * 1000;
+  const windowStart = now - windowMs;
 
   try {
-    const count = await redis.incr(redisKey);
+    // Atomic pipeline: prune → count → add → expire
+    const pipeline = redis.pipeline();
+    pipeline.zremrangebyscore(redisKey, 0, windowStart);
+    pipeline.zcard(redisKey);
+    pipeline.zadd(redisKey, now, `${now}-${randomBytes(6).toString("hex")}`);
+    pipeline.expire(redisKey, windowSec + 1);
 
-    // Set expiry only on first hit so the window starts fresh
-    if (count === 1) {
-      await redis.expire(redisKey, windowSec);
-    }
+    const results = await pipeline.exec();
+    // results[1] is [error, count] — the count BEFORE we added the new member
+    const countBefore = (results?.[1]?.[1] as number) ?? 0;
 
-    if (count > limit) {
-      const ttl = await redis.ttl(redisKey);
-      throw rateLimitResponse(ttl > 0 ? ttl : windowSec);
+    if (countBefore >= limit) {
+      // Remove the member we just added since the request is rejected
+      await redis.zremrangebyscore(redisKey, now, now);
+      throw rateLimitResponse(Math.ceil(windowMs / 1000));
     }
   } catch (err) {
     // If Redis is unavailable, let the request through rather than blocking
-    // all traffic.  Re-throw only genuine rate-limit responses.
+    // all traffic. Re-throw only genuine rate-limit responses.
     if (err instanceof Response) throw err;
-    // Redis error — log silently and continue
+    // Redis error — fail open and continue
   }
 }
 

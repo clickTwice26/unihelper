@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  ClipboardCheck,
   ClipboardList,
   Clock,
   Copy,
@@ -89,7 +90,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const courseId = params.courseId;
   if (!courseId) throw redirect("/dashboard/courses");
 
-  const course = await db.course.findUnique({ where: { id: courseId } });
+  const course = await db.course.findUnique({ where: { id: courseId, deletedAt: null } });
   if (!course) throw new Response("Not Found", { status: 404 });
 
   const allowed = await canAccessCourses(session.id, course.ownerId);
@@ -113,6 +114,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   let finalExam: { id: string; syllabus: string; examDate: Date; venue: string | null; notes: string | null } | null = null;
   let customLinks: { id: string; label: string; url: string; createdAt: Date }[] = [];
   let presentation: { id: string; title: string; description: string; presentationDate: Date; venue: string | null; notes: string | null } | null = null;
+  let attendanceData: {
+    classDates: string[];
+    hasRoutine: boolean;
+    attendanceMap: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>;
+  } | null = null;
 
   if (activeTab === "storage") {
     const { listCourseFiles, getCourseStorageUsage, sanitizeStoragePath } =
@@ -176,8 +182,60 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     });
   }
 
+  if (activeTab === "attendance") {
+    const { db } = await import("~/lib/db.server");
+
+    // Find the course owner's routine entries matching this course title (case-insensitive)
+    const routines = await db.classRoutine.findMany({
+      where: {
+        userId: course.ownerId,
+        courseName: { equals: course.title, mode: "insensitive" },
+      },
+      select: { dayOfWeek: true },
+    });
+
+    const daysOfWeek = [...new Set(routines.map((r) => r.dayOfWeek))];
+    const hasRoutine = daysOfWeek.length > 0;
+
+    // Generate all class dates using PostgreSQL generate_series — no JS iteration.
+    const classDates: string[] = [];
+    if (hasRoutine) {
+      type DateRow = { date: Date };
+      const rows = await db.$queryRaw<DateRow[]>`
+        SELECT gs::date AS date
+        FROM generate_series(
+          ${course.createdAt}::date,
+          CURRENT_DATE,
+          '1 day'::interval
+        ) AS gs
+        WHERE EXTRACT(DOW FROM gs) = ANY(${daysOfWeek}::int[])
+        ORDER BY gs DESC
+      `;
+      for (const row of rows) {
+        const d = new Date(row.date);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        classDates.push(`${y}-${m}-${day}`);
+      }
+    }
+
+    // Load viewer's existing attendance records for this course
+    const records = await db.attendance.findMany({
+      where: { userId: session.id, courseId },
+      select: { date: true, status: true, timing: true },
+    });
+
+    const attendanceMap: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }> = {};
+    for (const rec of records) {
+      attendanceMap[rec.date] = { status: rec.status, timing: rec.timing };
+    }
+
+    attendanceData = { classDates, hasRoutine, attendanceMap };
+  }
+
   const r2PublicUrl = (await import("~/lib/env.server")).env.R2_PUBLIC_URL.replace(/\/$/, "");
-  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks, presentation };
+  return { course, backHref, viewerId: session.id, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks, presentation, attendanceData };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -278,7 +336,8 @@ export async function action({ request, params }: Route.ActionArgs) {
       throw await flash("success", `"${uploadable.name}" uploaded.`);
     } catch (err) {
       if (err instanceof Response) throw err;
-      console.error("[upload-file] error:", err);
+      const { logger } = await import("~/lib/logger.server");
+      logger.error({ err, courseId, intent: "upload-file" }, "File upload failed");
       const msgs: Record<string, string> = {
         EMPTY_FILE: "Cannot upload an empty file.",
         FILE_TOO_LARGE: "File exceeds the 50 MB per-file limit.",
@@ -453,6 +512,31 @@ export async function action({ request, params }: Route.ActionArgs) {
     const { db } = await import("~/lib/db.server");
     await db.presentation.deleteMany({ where: { courseId } });
     throw await flash("success", "Presentation details removed.");
+  }
+
+  // ── Attendance: upsert ─────────────────────────────────────────────────
+  if (intent === "upsert-attendance") {
+    const { db } = await import("~/lib/db.server");
+    const date = String(formData.get("date") ?? "").trim();
+    const state = String(formData.get("attendanceState") ?? "").trim();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+      throw await flash("error", "Invalid date.");
+    if (!["present", "late", "absent"].includes(state))
+      throw await flash("error", "Invalid attendance state.");
+
+    const status = state === "absent" ? ("ABSENT" as const) : ("PRESENT" as const);
+    const timing = state === "late" ? ("LATE" as const) : ("ON_TIME" as const);
+
+    await db.attendance.upsert({
+      where: { userId_courseId_date: { userId: session.id, courseId, date } },
+      create: { userId: session.id, courseId, date, status, timing },
+      update: { status, timing },
+    });
+
+    throw redirect(`/dashboard/courses/${courseId}?tab=attendance`, {
+      headers: { "Set-Cookie": await serializeFlash({ type: "success", message: "Attendance saved." }) },
+    });
   }
 
   // ── Course: delete ─────────────────────────────────────────────────────
@@ -1841,6 +1925,252 @@ function PresentationTab({
   );
 }
 
+// ── Attendance Tab ────────────────────────────────────────────────────────────
+
+const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function localDateParts(dateKey: string): { dayAbbr: string; formatted: string } {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return {
+    dayAbbr: DAY_ABBR[dt.getDay()],
+    formatted: dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+  };
+}
+
+type AttendanceState = "present" | "late" | "absent" | "unset";
+
+function getState(
+  dateKey: string,
+  map: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>,
+): AttendanceState {
+  const rec = map[dateKey];
+  if (!rec) return "unset";
+  if (rec.status === "ABSENT") return "absent";
+  if (rec.timing === "LATE") return "late";
+  return "present";
+}
+
+function AttendanceTab({
+  courseId,
+  courseTitle,
+  classDates,
+  hasRoutine,
+  attendanceMap,
+  navigation,
+}: {
+  courseId: string;
+  courseTitle: string;
+  classDates: string[];
+  hasRoutine: boolean;
+  attendanceMap: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>;
+  navigation: ReturnType<typeof useNavigation>;
+}) {
+  const isSubmitting = navigation.state === "submitting";
+  const submittingDate = String(navigation.formData?.get("date") ?? "");
+  const submittingState = String(navigation.formData?.get("attendanceState") ?? "");
+
+  // Compute stats
+  const total = classDates.length;
+  let presentCount = 0;
+  let lateCount = 0;
+  let absentCount = 0;
+  for (const d of classDates) {
+    const s = getState(d, attendanceMap);
+    if (s === "present") presentCount++;
+    else if (s === "late") { presentCount++; lateCount++; }
+    else if (s === "absent") absentCount++;
+  }
+  const attendedCount = presentCount; // present + late
+  const attendancePct = total > 0 ? Math.round((attendedCount / total) * 100) : 0;
+
+  if (!hasRoutine) {
+    return (
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          <ClipboardCheck size={22} />
+        </div>
+        <p className="mt-3 text-sm font-semibold text-slate-700">No routine found for this course</p>
+        <p className="mt-1 text-sm text-slate-400">
+          Add <span className="font-semibold">&ldquo;{courseTitle}&rdquo;</span> to your Weekly Routine to enable attendance tracking. The schedule is auto-calculated from your routine.
+        </p>
+      </div>
+    );
+  }
+
+  if (classDates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          <ClipboardCheck size={22} />
+        </div>
+        <p className="mt-3 text-sm font-semibold text-slate-700">No class sessions yet</p>
+        <p className="mt-1 text-sm text-slate-400">Class dates will appear here once sessions are scheduled.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-5 space-y-5">
+      {/* Stats bar */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
+          <p className="text-xl font-bold text-slate-800">{total}</p>
+          <p className="mt-0.5 text-xs font-medium text-slate-400 uppercase tracking-wide">Total Classes</p>
+        </div>
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-center shadow-sm">
+          <p className="text-xl font-bold text-emerald-700">{attendedCount}</p>
+          <p className="mt-0.5 text-xs font-medium text-emerald-500 uppercase tracking-wide">Present</p>
+        </div>
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-center shadow-sm">
+          <p className="text-xl font-bold text-red-600">{absentCount}</p>
+          <p className="mt-0.5 text-xs font-medium text-red-400 uppercase tracking-wide">Absent</p>
+        </div>
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-center shadow-sm">
+          <p className="text-xl font-bold text-indigo-700">{attendancePct}%</p>
+          <p className="mt-0.5 text-xs font-medium text-indigo-400 uppercase tracking-wide">Attendance</p>
+        </div>
+      </div>
+
+      {/* Attendance bar */}
+      {total > 0 && (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="mb-1.5 flex items-center justify-between text-xs text-slate-500">
+            <span className="font-medium">Attendance Rate</span>
+            <span>
+              {attendedCount} / {total} classes
+              {lateCount > 0 && <span className="ml-1.5 text-amber-500">({lateCount} late)</span>}
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div
+              className={`h-full rounded-full transition-all ${
+                attendancePct >= 75 ? "bg-emerald-500" : attendancePct >= 50 ? "bg-amber-500" : "bg-red-500"
+              }`}
+              style={{ width: `${attendancePct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          Present (on time)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+          Late
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+          Absent
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-slate-200" />
+          Not recorded
+        </span>
+      </div>
+
+      {/* Attendance rows */}
+      <div className="flex flex-col gap-2">
+        {classDates.map((dateKey) => {
+          const { dayAbbr, formatted } = localDateParts(dateKey);
+          const current = getState(dateKey, attendanceMap);
+          const isPending = isSubmitting && submittingDate === dateKey;
+
+          return (
+            <div
+              key={dateKey}
+              className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            >
+              {/* Date info */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                  <span className="text-[10px] font-semibold uppercase leading-none">{dayAbbr}</span>
+                  <span className="mt-0.5 text-sm font-bold leading-none">{dateKey.slice(8)}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{formatted}</p>
+                  <p className="text-xs text-slate-400">{dayAbbr}day class</p>
+                </div>
+              </div>
+
+              {/* Toggle buttons — one Form, three submit buttons */}
+              <Form method="post" preventScrollReset className="flex shrink-0 items-center gap-1.5">
+                <input type="hidden" name="intent" value="upsert-attendance" />
+                <input type="hidden" name="date" value={dateKey} />
+                <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=attendance`} />
+
+                <button
+                  type="submit"
+                  name="attendanceState"
+                  value="present"
+                  disabled={isPending}
+                  title="Mark Present (on time)"
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                    current === "present"
+                      ? "bg-emerald-500 text-white shadow-sm"
+                      : "border border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                  }`}
+                >
+                  {isPending && submittingState === "present" ? "…" : (
+                    <>
+                      <Check size={11} />
+                      Present
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="submit"
+                  name="attendanceState"
+                  value="late"
+                  disabled={isPending}
+                  title="Mark Late"
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                    current === "late"
+                      ? "bg-amber-400 text-white shadow-sm"
+                      : "border border-slate-200 bg-white text-slate-500 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+                  }`}
+                >
+                  {isPending && submittingState === "late" ? "…" : (
+                    <>
+                      <Clock size={11} />
+                      Late
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="submit"
+                  name="attendanceState"
+                  value="absent"
+                  disabled={isPending}
+                  title="Mark Absent"
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                    current === "absent"
+                      ? "bg-red-500 text-white shadow-sm"
+                      : "border border-slate-200 bg-white text-slate-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  }`}
+                >
+                  {isPending && submittingState === "absent" ? "…" : (
+                    <>
+                      <X size={11} />
+                      Absent
+                    </>
+                  )}
+                </button>
+              </Form>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StorageTab({
   courseId,
   storagePath,
@@ -2237,7 +2567,7 @@ function InfoRow({
 }
 
 export default function CourseDetailPage() {
-  const { course, backHref, viewerId, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks, presentation } =
+  const { course, backHref, viewerId, storageFiles, storageUsageBytes, storagePath, r2PublicUrl, quizzes, assignments, midExam, finalExam, customLinks, presentation, attendanceData } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2245,9 +2575,9 @@ export default function CourseDetailPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const isOwner = viewerId === course.ownerId;
 
-  type Tab = "information" | "links" | "storage" | "quiz" | "assignment" | "mid" | "final" | "presentation";
+  type Tab = "information" | "links" | "storage" | "quiz" | "assignment" | "mid" | "final" | "presentation" | "attendance";
   const rawTab = searchParams.get("tab") ?? "information";
-  const validTabs: Tab[] = ["links", "storage", "quiz", "assignment", "mid", "final", "presentation"];
+  const validTabs: Tab[] = ["links", "storage", "quiz", "assignment", "mid", "final", "presentation", "attendance"];
   const activeTab: Tab = (validTabs.includes(rawTab as Tab) ? rawTab : "information") as Tab;
 
   const isSubmitting = navigation.state === "submitting";
@@ -2366,6 +2696,7 @@ export default function CourseDetailPage() {
               { value: "mid",         label: "Mid" },
               { value: "final",       label: "Final" },
               { value: "presentation",label: "Presentation" },
+              { value: "attendance",  label: "Attendance" },
             ]}
           />
         </div>
@@ -2383,6 +2714,7 @@ export default function CourseDetailPage() {
                 { key: "mid", icon: BookMarked, label: "Mid" },
                 { key: "final", icon: GraduationCap, label: "Final" },
                 { key: "presentation", icon: Monitor, label: "Presentation" },
+                { key: "attendance", icon: ClipboardCheck, label: "Attendance" },
               ] as const
             ).map(({ key, icon: Icon, label }) => (
               <button
@@ -2513,6 +2845,23 @@ export default function CourseDetailPage() {
             navigation={navigation}
           />
         ) : null}
+
+        {/* Tab: Attendance */}
+        {activeTab === "attendance" ? (
+          <AttendanceTab
+            courseId={course.id}
+            courseTitle={course.title}
+            classDates={attendanceData?.classDates ?? []}
+            hasRoutine={attendanceData?.hasRoutine ?? false}
+            attendanceMap={
+              (attendanceData?.attendanceMap ?? {}) as Record<
+                string,
+                { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }
+              >
+            }
+            navigation={navigation}
+          />
+        ) : null}
       </div>
 
       {/* Edit modal */}
@@ -2527,3 +2876,5 @@ export default function CourseDetailPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

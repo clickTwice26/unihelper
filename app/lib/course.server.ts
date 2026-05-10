@@ -32,7 +32,7 @@ export async function getCourses(viewerId: string, ownerId: string) {
     throw new Error("FORBIDDEN");
   }
   return db.course.findMany({
-    where: { ownerId },
+    where: { ownerId, deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -53,7 +53,7 @@ export async function updateCourse(
   courseId: string,
   data: CourseData,
 ) {
-  const course = await db.course.findUnique({ where: { id: courseId } });
+  const course = await db.course.findUnique({ where: { id: courseId, deletedAt: null } });
   if (!course) throw new Error("NOT_FOUND");
   if (!(await canAccessCourses(actorId, course.ownerId))) {
     throw new Error("FORBIDDEN");
@@ -62,10 +62,11 @@ export async function updateCourse(
 }
 
 export async function deleteCourse(actorId: string, courseId: string) {
-  const course = await db.course.findUnique({ where: { id: courseId } });
+  const course = await db.course.findUnique({ where: { id: courseId, deletedAt: null } });
   if (!course) throw new Error("NOT_FOUND");
   if (!(await canAccessCourses(actorId, course.ownerId))) {
     throw new Error("FORBIDDEN");
   }
-  return db.course.delete({ where: { id: courseId } });
+  // Soft delete — data is retained and can be purged by a scheduled job
+  return db.course.update({ where: { id: courseId }, data: { deletedAt: new Date() } });
 }

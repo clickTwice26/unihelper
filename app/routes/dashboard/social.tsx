@@ -548,3 +548,5 @@ export default function SocialPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

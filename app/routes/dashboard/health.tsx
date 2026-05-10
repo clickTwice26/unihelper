@@ -1005,3 +1005,5 @@ export default function HealthPage() {
     </>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

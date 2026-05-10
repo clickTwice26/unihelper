@@ -13,6 +13,16 @@ enum TaskStatus {
   DONE
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum AttendanceTiming {
+  ON_TIME
+  LATE
+}
+
 enum BuddyRequestStatus {
   PENDING
   ACCEPTED
@@ -39,6 +49,7 @@ model User {
   weightLogs          WeightLog[]
   dietLogs            DietLog[]
   personalFiles       PersonalFile[]
+  attendances         Attendance[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -46,6 +57,7 @@ model User {
 model ClassRoutine {
   id         String   @id @default(cuid())
   userId     String
+  courseId   String?  // optional FK — links to Course when names match
   dayOfWeek  Int      // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
   courseName String
   room       String?
@@ -53,10 +65,12 @@ model ClassRoutine {
   endTime    String   // "HH:MM" 24h
   color      String   @default("indigo")
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([userId, dayOfWeek])
+  @@index([courseId])
 }
 
 model Session {
@@ -112,6 +126,7 @@ model Course {
   blcLink      String?
   groupLink    String?
   ownerId      String
+  deletedAt    DateTime?    // soft delete — null means active
   owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   files        CourseFile[]
   links        CourseLink[]
@@ -120,10 +135,13 @@ model Course {
   midExam      MidExam?
   finalExam    FinalExam?
   presentation Presentation?
+  attendances  Attendance[]
+  routines     ClassRoutine[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
   @@index([ownerId, createdAt])
+  @@index([ownerId, deletedAt])
 }
 
 model CourseLink {
@@ -332,4 +350,22 @@ model PersonalFile {
   createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ── Attendance Tracker ────────────────────────────────────────────────────────
+
+model Attendance {
+  id        String           @id @default(cuid())
+  userId    String
+  courseId  String
+  date      String           // YYYY-MM-DD (local date, no timezone shift)
+  status    AttendanceStatus @default(PRESENT)
+  timing    AttendanceTiming @default(ON_TIME)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, courseId, date])
+  @@index([userId, courseId])
 }

@@ -780,3 +780,5 @@ export default function TasksPage() {
     </>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

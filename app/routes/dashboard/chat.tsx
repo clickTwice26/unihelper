@@ -567,3 +567,5 @@ export default function ChatPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

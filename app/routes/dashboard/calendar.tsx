@@ -714,3 +714,5 @@ export default function CalendarPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

@@ -1,5 +1,5 @@
 import { Form, Link, useLoaderData, useNavigation } from "react-router";
-import { Camera, KeyRound, Mail, Shield, User } from "lucide-react";
+import { Camera, KeyRound, Mail, Monitor, Shield, Trash2, User } from "lucide-react";
 
 import type { Route } from "./+types/home";
 
@@ -10,12 +10,14 @@ export function meta() {
 // ── Loader ──────────────────────────────────────────────────────────────────
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { getAuthenticatedUser, getUserById } = await import("~/lib/auth.server");
+  const { getAuthenticatedUser, getUserById, getUserSessions } = await import("~/lib/auth.server");
   const session = await getAuthenticatedUser(request);
   if (!session) throw new Response("Unauthorized", { status: 401 });
 
   const user = await getUserById(session.id);
   if (!user) throw new Response("Not found", { status: 404 });
+
+  const sessions = await getUserSessions(session.id);
 
   return {
     user: {
@@ -26,6 +28,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       isPublic: user.isPublic,
       acceptRequests: user.acceptRequests,
     },
+    sessions,
   };
 }
 
@@ -40,6 +43,8 @@ export async function action({ request }: Route.ActionArgs) {
     updateUserPassword,
     updateUserSettings,
     destroyOtherSessions,
+    revokeSession,
+    revokeAllOtherSessions,
   } = await import("~/lib/auth.server");
   const { serializeFlash } = await import("~/lib/flash.server");
   const { rateLimit } = await import("~/lib/ratelimit.server");
@@ -60,9 +65,11 @@ export async function action({ request }: Route.ActionArgs) {
 
   // Per-intent rate limits (keyed by user ID)
   const limits: Record<string, { limit: number; windowSec: number }> = {
-    profile:  { limit: 20, windowSec: 3600 },   // 20 profile updates / hour
-    password: { limit: 5,  windowSec: 900  },   // 5 password changes / 15 min
-    settings: { limit: 30, windowSec: 3600 },   // 30 settings saves / hour
+    profile:            { limit: 20, windowSec: 3600 },   // 20 profile updates / hour
+    password:           { limit: 5,  windowSec: 900  },   // 5 password changes / 15 min
+    settings:           { limit: 30, windowSec: 3600 },   // 30 settings saves / hour
+    "revoke-session":        { limit: 20, windowSec: 3600 },
+    "revoke-all-sessions":   { limit: 5,  windowSec: 3600 },
   };
   if (limits[intent]) {
     try {
@@ -140,6 +147,22 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
+  // ── Revoke a single session ───────────────────────────────────────────────
+  if (intent === "revoke-session") {
+    const sessionId = String(formData.get("sessionId") ?? "").trim();
+    if (!sessionId || !/^[a-z0-9_-]+$/i.test(sessionId)) {
+      throw await flash("error", "Invalid session ID.");
+    }
+    await revokeSession(session.id, sessionId);
+    throw await flash("success", "Session revoked.");
+  }
+
+  // ── Revoke all other sessions ─────────────────────────────────────────────
+  if (intent === "revoke-all-sessions") {
+    await revokeAllOtherSessions(request, session.id);
+    throw await flash("success", "All other sessions have been signed out.");
+  }
+
   throw await flash("error", "Unknown action.");
 }
 
@@ -163,7 +186,7 @@ function Toggle({ checked, name }: { checked: boolean; name: string }) {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, sessions } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const initials = (user.displayName ?? user.email).slice(0, 2).toUpperCase();
@@ -380,6 +403,70 @@ export default function ProfilePage() {
         </Form>
       </section>
 
+      {/* ── Active Sessions ── */}
+      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
+              <Monitor size={17} className="text-sky-600" />
+            </div>
+            <div>
+              <p className="text-[0.9rem] font-semibold text-slate-900 leading-tight">Active Sessions</p>
+              <p className="text-xs text-slate-500 mt-0.5">Devices currently signed in to your account.</p>
+            </div>
+          </div>
+          {sessions.length > 1 && (
+            <Form method="post" preventScrollReset>
+              <input type="hidden" name="intent" value="revoke-all-sessions" />
+              <button
+                type="submit"
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 border border-rose-200 hover:border-rose-300 rounded-lg px-3 py-1.5 transition-colors"
+              >
+                Sign out all other devices
+              </button>
+            </Form>
+          )}
+        </div>
+        <ul className="divide-y divide-slate-100">
+          {sessions.map((s) => {
+            const created = new Date(s.createdAt).toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            return (
+              <li key={s.id} className="px-6 py-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                    <Monitor size={14} className="text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-800 font-medium">Session <code className="text-xs bg-slate-100 px-1 rounded">{s.tokenPrefix}…</code></p>
+                    <p className="text-xs text-slate-500 mt-0.5">Signed in {created}</p>
+                  </div>
+                </div>
+                <Form method="post" preventScrollReset>
+                  <input type="hidden" name="intent" value="revoke-session" />
+                  <input type="hidden" name="sessionId" value={s.id} />
+                  <button
+                    type="submit"
+                    className="text-slate-400 hover:text-rose-500 transition-colors"
+                    title="Revoke this session"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </Form>
+              </li>
+            );
+          })}
+          {sessions.length === 0 && (
+            <li className="px-6 py-6 text-sm text-slate-400 text-center">No active sessions found.</li>
+          )}
+        </ul>
+      </section>
+
       {/* ── Danger zone ── */}
       <section className="bg-white border border-rose-100 rounded-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-rose-100">
@@ -403,3 +490,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

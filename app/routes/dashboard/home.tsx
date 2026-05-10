@@ -390,3 +390,5 @@ export default function DashboardHome() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

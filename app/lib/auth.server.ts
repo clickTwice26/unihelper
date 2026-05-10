@@ -184,6 +184,41 @@ export async function redirectIfAuthenticated(request: Request, redirectTo = "/"
   }
 }
 
+/**
+ * Returns all active (non-expired) sessions for a user.
+ * Token prefix is exposed for display — the full token is never sent to the client.
+ */
+export async function getUserSessions(userId: string) {
+  const sessions = await db.session.findMany({
+    where: { userId, expiresAt: { gt: new Date() } },
+    select: { id: true, createdAt: true, expiresAt: true, token: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return sessions.map((s) => ({
+    id: s.id,
+    createdAt: s.createdAt,
+    expiresAt: s.expiresAt,
+    tokenPrefix: s.token.slice(0, 8),
+  }));
+}
+
+/** Revokes a single session by DB row id, scoped to the owning user. */
+export async function revokeSession(userId: string, sessionId: string) {
+  await db.session.deleteMany({ where: { id: sessionId, userId } });
+}
+
+/** Revokes all sessions for a user except the current one. */
+export async function revokeAllOtherSessions(request: Request, userId: string) {
+  const currentToken = await getSessionToken(request);
+  if (!currentToken) {
+    await db.session.deleteMany({ where: { userId } });
+    return;
+  }
+  await db.session.deleteMany({
+    where: { userId, NOT: { token: currentToken } },
+  });
+}
+
 export async function findUserByEmail(email: string) {
   return db.user.findUnique({
     where: {

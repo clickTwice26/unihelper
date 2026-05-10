@@ -69,7 +69,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     isViewingBuddy = true;
   }
 
-  const courses = await getCourses(session.id, ownerId);
+  const { cached } = await import("~/lib/cache.server");
+  const courses = await cached(
+    `courses:${ownerId}`,
+    30,
+    () => getCourses(session.id, ownerId),
+  );
 
   return { courses, ownerId, ownerName, isViewingBuddy };
 }
@@ -126,8 +131,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "delete") {
     const courseId = String(formData.get("courseId") ?? "").trim();
     if (!courseId) throw await flash("error", "Missing course ID.");
+    const { invalidateCache } = await import("~/lib/cache.server");
     try {
       await deleteCourse(session.id, courseId);
+      await invalidateCache(`courses:${session.id}`);
       throw await flash("success", "Course deleted.");
     } catch (err) {
       if (err instanceof Response) throw err;
@@ -195,8 +202,10 @@ export async function action({ request }: Route.ActionArgs) {
 
   // ── Create ───────────────────────────────────────────────────────────────
   if (intent === "create") {
+    const { invalidateCache } = await import("~/lib/cache.server");
     try {
       await createCourse(session.id, ownerId, data);
+      await invalidateCache(`courses:${ownerId}`);
       throw await flash("success", "Course added.");
     } catch (err) {
       if (err instanceof Response) throw err;
@@ -210,8 +219,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "update") {
     const courseId = String(formData.get("courseId") ?? "").trim();
     if (!courseId) throw await flash("error", "Missing course ID.");
+    const { invalidateCache } = await import("~/lib/cache.server");
     try {
       await updateCourse(session.id, courseId, data);
+      await invalidateCache(`courses:${ownerId}`);
       throw await flash("success", "Course updated.");
     } catch (err) {
       if (err instanceof Response) throw err;
@@ -597,3 +608,5 @@ export default function CoursesPage() {
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

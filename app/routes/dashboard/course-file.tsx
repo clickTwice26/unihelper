@@ -69,3 +69,5 @@ export default function CourseFilePage() {
   return null;
 }
 
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

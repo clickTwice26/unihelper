@@ -453,3 +453,5 @@ export default function StoragePage() {
     </>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

@@ -986,3 +986,5 @@ export default function ExpensesPage() {
   );
 }
 
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";

@@ -781,3 +781,5 @@ export default function RoutinePage() {
     </>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";
