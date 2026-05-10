@@ -2284,7 +2284,7 @@ export default function CourseDetailPage() {
       {/* Main card */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         {/* Card header */}
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="flex min-w-0 items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
               <BookOpen size={22} />
@@ -2323,7 +2323,7 @@ export default function CourseDetailPage() {
 
         {/* Delete confirm banner */}
         {deleteConfirm ? (
-          <div className="flex items-center justify-between gap-4 border-b border-red-100 bg-red-50 px-6 py-4">
+          <div className="flex flex-col gap-3 border-b border-red-100 bg-red-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <p className="text-sm font-medium text-red-700">
               Are you sure you want to delete this course? This cannot be undone.
             </p>
@@ -2351,34 +2351,55 @@ export default function CourseDetailPage() {
           </div>
         ) : null}
 
-        {/* Tab bar */}
-        <div className="flex border-b border-slate-100 px-6">
-          {(
-            [
-              { key: "information", icon: Info, label: "Information" },
-              { key: "links", icon: Link2, label: "Links" },
-              { key: "storage", icon: HardDrive, label: "Storage" },
-              { key: "quiz", icon: ClipboardList, label: "Quiz" },
-              { key: "assignment", icon: FileText, label: "Assignment" },
-              { key: "mid", icon: BookMarked, label: "Mid" },
-              { key: "final", icon: GraduationCap, label: "Final" },
-              { key: "presentation", icon: Monitor, label: "Presentation" },
-            ] as const
-          ).map(({ key, icon: Icon, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => switchTab(key)}
-              className={`mr-4 flex items-center gap-2 border-b-2 py-3.5 text-sm font-semibold transition-colors ${
-                activeTab === key
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Icon size={15} />
-              {label}
-            </button>
-          ))}
+        {/* Mobile: custom select picker */}
+        <div className="border-b border-slate-100 px-4 py-3 sm:hidden">
+          <CustomSelect
+            name="tab-mobile"
+            value={activeTab}
+            onChange={(v) => switchTab(v as typeof activeTab)}
+            options={[
+              { value: "information", label: "Information" },
+              { value: "links",       label: "Links" },
+              { value: "storage",     label: "Storage" },
+              { value: "quiz",        label: "Quiz" },
+              { value: "assignment",  label: "Assignment" },
+              { value: "mid",         label: "Mid" },
+              { value: "final",       label: "Final" },
+              { value: "presentation",label: "Presentation" },
+            ]}
+          />
+        </div>
+
+        {/* Desktop: tab bar */}
+        <div className="hidden sm:block">
+          <div className="flex border-b border-slate-100 px-6">
+            {(
+              [
+                { key: "information", icon: Info, label: "Information" },
+                { key: "links", icon: Link2, label: "Links" },
+                { key: "storage", icon: HardDrive, label: "Storage" },
+                { key: "quiz", icon: ClipboardList, label: "Quiz" },
+                { key: "assignment", icon: FileText, label: "Assignment" },
+                { key: "mid", icon: BookMarked, label: "Mid" },
+                { key: "final", icon: GraduationCap, label: "Final" },
+                { key: "presentation", icon: Monitor, label: "Presentation" },
+              ] as const
+            ).map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => switchTab(key)}
+                className={`mr-4 flex items-center gap-2 border-b-2 py-3.5 text-sm font-semibold transition-colors ${
+                  activeTab === key
+                    ? "border-indigo-600 text-indigo-600"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tab: Information */}

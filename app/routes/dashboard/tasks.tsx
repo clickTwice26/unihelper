@@ -344,13 +344,13 @@ function AddTaskModal({
   const [assignees, setAssignees] = useState<string[]>([]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-bold text-slate-900">New Task</h2>
           <button
@@ -578,7 +578,7 @@ function TaskCard({
       )}
 
       {/* Status quick-actions */}
-      <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
         {prevStatus && (
           <Form method="post" preventScrollReset>
             <input type="hidden" name="intent" value="update-status" />
@@ -679,7 +679,7 @@ export default function TasksPage() {
 
       <div className="space-y-5">
         {/* Stats + CTA */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
               {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
@@ -705,7 +705,7 @@ export default function TasksPage() {
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-95"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-95 sm:w-auto"
           >
             <Plus size={15} />
             New Task
@@ -713,31 +713,33 @@ export default function TasksPage() {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setFilter(tab.key)}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition
-                ${
-                  filter === tab.key
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-            >
-              {tab.label}
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                  filter === tab.key
-                    ? "bg-indigo-500 text-white"
-                    : "bg-slate-100 text-slate-500"
-                }`}
+        <div className="-mx-1 overflow-x-auto">
+          <div className="flex min-w-max items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFilter(tab.key)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition sm:gap-2 sm:px-4
+                  ${
+                    filter === tab.key
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
               >
-                {tab.count}
-              </span>
-            </button>
-          ))}
+                {tab.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
+                    filter === tab.key
+                      ? "bg-indigo-500 text-white"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Task grid or empty state */}

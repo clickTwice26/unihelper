@@ -256,13 +256,13 @@ function AddClassModal({
   const [courseName, setCourseName] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 flex max-h-[92vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl">
+      <div className="relative z-10 flex max-h-[92vh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-bold text-slate-900">Add Class to Routine</h2>
@@ -600,18 +600,19 @@ export default function RoutinePage() {
             <button
               type="button"
               onClick={() => openModalFor(1)}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-95"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-95 sm:px-4 sm:py-2.5"
             >
               <Plus size={15} />
-              Add Class
+              <span>Add Class</span>
             </button>
           </div>
         </div>
 
-        {/* Weekly grid */}
+        {/* Weekly grid — scrolls horizontally on small screens */}
+        <div className="-mx-1 overflow-x-auto pb-1">
         <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: `repeat(${visibleDays.length || 1}, minmax(0, 1fr))` }}
+          className="grid gap-3"
+          style={{ gridTemplateColumns: `repeat(${visibleDays.length || 1}, minmax(160px, 1fr))` }}
         >
           {visibleDays.map((day) => {
             const dayIdx = DAYS.findIndex((d) => d.value === day.value);
@@ -736,6 +737,7 @@ export default function RoutinePage() {
             );
           })}
         </div>
+        </div>{/* end overflow-x-auto */}
 
         {/* Empty state */}
         {totalClasses === 0 && (
