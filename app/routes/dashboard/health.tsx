@@ -619,7 +619,7 @@ function WeightTab({
   return (
     <div className="space-y-5">
       {/* KPI row */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           {
             label: "Current",
@@ -750,7 +750,7 @@ function DietTab({
   return (
     <div className="space-y-5">
       {/* KPI row */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {[
           {
             label: "Total Calories",
@@ -953,44 +953,44 @@ export default function HealthPage() {
 
       <div className="space-y-5">
         {/* Controls row */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Month nav */}
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => goMonth(-1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors shadow-sm">
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-sm font-bold text-slate-900 min-w-[130px] text-center">
-              {MONTHS[month - 1]} {year}
-            </span>
-            <button type="button" onClick={() => goMonth(1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors shadow-sm">
-              <ChevronRight size={16} />
-            </button>
+        <div className="space-y-2">
+          {/* Row 1: month nav + action buttons */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => goMonth(-1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors shadow-sm">
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm font-bold text-slate-900 min-w-[110px] text-center">
+                {MONTHS[month - 1]} {year}
+              </span>
+              <button type="button" onClick={() => goMonth(1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors shadow-sm">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setWeightModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-sm">
+                <Scale size={14} /> Weight
+              </button>
+              <button type="button" onClick={() => setDietModalOpen(true)}
+                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700">
+                <Plus size={16} /> Meal
+              </button>
+            </div>
           </div>
-
-          {/* Tabs */}
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm ml-2">
+          {/* Row 2: tab switcher */}
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
             <button type="button" onClick={() => setTab("weight")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                 activeTab === "weight" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               <Scale size={13} /> Weight
             </button>
             <button type="button" onClick={() => setTab("diet")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                 activeTab === "diet" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               <UtensilsCrossed size={13} /> Diet & Food
-            </button>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={() => setWeightModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-sm">
-              <Scale size={14} /> Log Weight
-            </button>
-            <button type="button" onClick={() => setDietModalOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700">
-              <Plus size={16} /> Log Meal
             </button>
           </div>
         </div>

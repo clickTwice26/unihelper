@@ -100,7 +100,7 @@ export default function handleRequest(
               // Tailwind inlines style attributes; Google Fonts needs style-src
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              `img-src 'self' data: ${env.R2_PUBLIC_URL}`,
+              `img-src 'self' data: https://api.qrserver.com ${env.R2_PUBLIC_URL}`,
               `frame-src 'self' ${env.R2_PUBLIC_URL}`,
               "connect-src 'self' ws: wss:",
               "worker-src 'self' blob:",

@@ -38,6 +38,7 @@ model User {
   expenses            Expense[]
   weightLogs          WeightLog[]
   dietLogs            DietLog[]
+  personalFiles       PersonalFile[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -315,4 +316,20 @@ model DietLog {
 
   @@index([userId, date])
   @@index([userId, mealType])
+}
+
+// ── Personal Storage ──────────────────────────────────────────────────────────
+
+model PersonalFile {
+  id          String   @id @default(cuid())
+  userId      String
+  key         String   // R2 object key  e.g. "personal/{userId}/{id}/{name}"
+  name        String   // display name
+  size        Int      // bytes
+  mimeType    String?
+  shareToken  String   @unique @default(cuid()) // public share token
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

@@ -684,10 +684,10 @@ function AnalyticsView({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-sm font-semibold text-slate-800">{cfg.label}</span>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-xs text-slate-400">{count} tx</span>
-                          <span className="text-xs font-semibold text-slate-500 w-9 text-right">{pct.toFixed(1)}%</span>
-                          <span className="text-sm font-extrabold text-slate-900 w-24 text-right">৳{fmt(total)}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="hidden sm:inline text-xs text-slate-400">{count} tx</span>
+                          <span className="hidden sm:inline text-xs font-semibold text-slate-500 w-9 text-right">{pct.toFixed(1)}%</span>
+                          <span className="text-sm font-extrabold text-slate-900 text-right">৳{fmt(total)}</span>
                         </div>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -878,40 +878,41 @@ export default function ExpensesPage() {
 
       <div className="space-y-5">
         {/* Controls row */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => goMonth(-1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 shadow-sm">
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-sm font-bold text-slate-900 min-w-[130px] text-center">{MONTHS[month - 1]} {year}</span>
-            <button type="button" onClick={() => goMonth(1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 shadow-sm">
-              <ChevronRight size={16} />
+        <div className="space-y-2">
+          {/* Row 1: month nav + Add button */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => goMonth(-1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 shadow-sm">
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm font-bold text-slate-900 min-w-[110px] text-center">{MONTHS[month - 1]} {year}</span>
+              <button type="button" onClick={() => goMonth(1)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 shadow-sm">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            <button type="button" onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition">
+              <Plus size={16} />
+              <span>Add Transaction</span>
             </button>
           </div>
-
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm ml-2">
+          {/* Row 2: tab switcher */}
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
             <button type="button" onClick={() => setTab("transactions")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "transactions" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "transactions" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               <List size={13} /> Transactions
             </button>
             <button type="button" onClick={() => setTab("analytics")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "analytics" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${activeTab === "analytics" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               <BarChart2 size={13} /> Analytics
-            </button>
-          </div>
-
-          <div className="ml-auto">
-            <button type="button" onClick={() => setModalOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition">
-              <Plus size={16} /> Add Transaction
             </button>
           </div>
         </div>
 
         {/* Balance strip — 4 cards */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <div className={`rounded-2xl border-2 px-5 py-4 shadow-sm ${thisMonthBalance >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
             <p className="text-xs font-bold text-slate-500 mb-1">Balance</p>
             <p className={`text-2xl font-extrabold ${thisMonthBalance >= 0 ? "text-emerald-700" : "text-red-600"}`}>
