@@ -15,6 +15,7 @@ import {
   Globe,
   Menu,
   X,
+  HeartPulse,
 } from "lucide-react";
 
 import type { Route } from "./+types/dashboard-layout";
@@ -44,6 +45,7 @@ const navItemsSimple: Array<{
   { label: "Routine", to: "/dashboard/routine", icon: LayoutGrid, end: false },
   { label: "Tasks", to: "/dashboard/tasks", icon: CheckSquare, end: false },
   { label: "Expenses", to: "/dashboard/expenses", icon: Wallet, end: false },
+  { label: "Health", to: "/dashboard/health", icon: HeartPulse, end: false },
 ];
 
 const footerItems: Array<{
@@ -67,6 +69,7 @@ export default function DashboardLayout() {
     if (pathname.startsWith("/dashboard/routine")) return "Routine";
     if (pathname.startsWith("/dashboard/tasks")) return "Tasks";
     if (pathname.startsWith("/dashboard/expenses")) return "Expenses";
+    if (pathname.startsWith("/dashboard/health")) return "Health Tracker";
     const segment = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   })();

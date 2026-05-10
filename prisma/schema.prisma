@@ -36,6 +36,8 @@ model User {
   classRoutines       ClassRoutine[]
   tasks               Task[]
   expenses            Expense[]
+  weightLogs          WeightLog[]
+  dietLogs            DietLog[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -259,4 +261,51 @@ model Expense {
 
   @@index([userId, date])
   @@index([userId, category])
+}
+
+// ── Health Tracker ────────────────────────────────────────────────────────────
+
+model WeightLog {
+  id        String   @id @default(cuid())
+  userId    String
+  weightKg  Decimal  @db.Decimal(5, 2)
+  date      DateTime
+  notes     String?  @db.Text
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum FoodHabit {
+  VERY_HEALTHY
+  HEALTHY
+  NEUTRAL
+  UNHEALTHY
+  VERY_UNHEALTHY
+}
+
+model DietLog {
+  id          String    @id @default(cuid())
+  userId      String
+  date        DateTime
+  mealType    MealType
+  description String
+  calories    Int?
+  habit       FoodHabit @default(NEUTRAL)
+  notes       String?   @db.Text
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, mealType])
 }

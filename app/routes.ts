@@ -15,6 +15,7 @@ export default [
     route("dashboard/routine", "routes/dashboard/routine.tsx"),
     route("dashboard/tasks", "routes/dashboard/tasks.tsx"),
     route("dashboard/expenses", "routes/dashboard/expenses.tsx"),
+    route("dashboard/health", "routes/dashboard/health.tsx"),
   ]),
   route("login", "routes/login.tsx"),
   route("register", "routes/register.tsx"),
