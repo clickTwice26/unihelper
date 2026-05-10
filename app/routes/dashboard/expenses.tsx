@@ -101,11 +101,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     six.push({ y: y2, m: m2, start: new Date(y2, m2 - 1, 1), end: new Date(y2, m2, 0, 23, 59, 59, 999) });
   }
 
-  const [allThisMonth, prevMonthRows, yearRows, sixMonthRows] = await Promise.all([
+  const [allThisMonth, prevMonthRows, yearRows, sixMonthRows, globalRows] = await Promise.all([
     db.expense.findMany({ where: { userId: user.id, date: { gte: monthStart, lte: monthEnd } }, orderBy: { date: "desc" } }),
     db.expense.findMany({ where: { userId: user.id, date: { gte: prevMonthStart, lte: prevMonthEnd } }, select: { amount: true, type: true } }),
     db.expense.findMany({ where: { userId: user.id, date: { gte: yearStart, lte: yearEnd } }, select: { date: true, amount: true, type: true } }),
     db.expense.findMany({ where: { userId: user.id, date: { gte: six[0].start, lte: six[5].end } }, select: { date: true, amount: true, type: true } }),
+    db.expense.findMany({ where: { userId: user.id }, select: { amount: true, type: true } }),
   ]);
 
   // Split this month by type
@@ -114,6 +115,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   const thisMonthExpTotal = thisMonthExpenses.reduce((s, e) => s + Number(e.amount), 0);
   const thisMonthIncTotal = thisMonthIncome.reduce((s, e) => s + Number(e.amount), 0);
   const thisMonthBalance  = thisMonthIncTotal - thisMonthExpTotal;
+
+  // Global all-time balance
+  const globalIncTotal  = globalRows.filter((r) => r.type === "INCOME").reduce((s, r) => s + Number(r.amount), 0);
+  const globalExpTotal  = globalRows.filter((r) => r.type === "EXPENSE").reduce((s, r) => s + Number(r.amount), 0);
+  const globalBalance   = globalIncTotal - globalExpTotal;
 
   // Prev month (aggregated in JS)
   const prevExpTotal = prevMonthRows.filter((r) => r.type === "EXPENSE").reduce((s, r) => s + Number(r.amount), 0);
@@ -197,6 +203,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     yearExpTotal, yearIncTotal,
     categoryTotals, categoryCounts,
     monthlyExpTotals, monthlyIncTotals, dailyTotals, sixMonthTotals, top5,
+    globalBalance,
     avgPerDay, expCount: thisMonthExpenses.length, incCount: thisMonthIncome.length,
     year, month, filterCat, filterType,
     now: now.toISOString(),
@@ -833,6 +840,7 @@ export default function ExpensesPage() {
   const {
     transactions, thisMonthExpTotal, thisMonthIncTotal, thisMonthBalance,
     prevExpTotal, prevIncTotal, prevBalance, yearExpTotal, yearIncTotal,
+    globalBalance,
     avgPerDay, expCount, incCount, categoryTotals, categoryCounts,
     monthlyExpTotals, monthlyIncTotals, dailyTotals, sixMonthTotals, top5,
     year, month, filterCat, filterType, now,
@@ -869,8 +877,6 @@ export default function ExpensesPage() {
     if (tab === "analytics") p.set("tab", "analytics"); else p.delete("tab");
     setSearchParams(p);
   }
-
-  const balanceDelta = thisMonthBalance - prevBalance;
 
   return (
     <>
@@ -913,15 +919,12 @@ export default function ExpensesPage() {
 
         {/* Balance strip — 4 cards */}
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <div className={`rounded-2xl border-2 px-5 py-4 shadow-sm ${thisMonthBalance >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+          <div className={`rounded-2xl border-2 px-5 py-4 shadow-sm ${globalBalance >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
             <p className="text-xs font-bold text-slate-500 mb-1">Balance</p>
-            <p className={`text-2xl font-extrabold ${thisMonthBalance >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-              {thisMonthBalance >= 0 ? "+" : ""}৳{fmt(thisMonthBalance)}
+            <p className={`text-2xl font-extrabold ${globalBalance >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+              {globalBalance >= 0 ? "+" : ""}৳{fmt(globalBalance)}
             </p>
-            <div className={`mt-1.5 flex items-center gap-1 text-xs font-semibold ${balanceDelta >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-              {balanceDelta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-              {balanceDelta >= 0 ? "+" : ""}৳{fmt(Math.abs(balanceDelta))} vs last month
-            </div>
+            <p className="mt-1.5 text-xs text-slate-400">All time</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
