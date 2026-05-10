@@ -71,10 +71,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!session) throw redirect("/login");
 
   const searchQuery = normalizeSearchQuery(url.searchParams.get("q"));
-  const directory = await getSocialDirectory(session.id);
-  const publicUsers = directory.publicUsers.filter((user) =>
-    matchesSearch(user.displayName, searchQuery),
-  );
+  const directory = await getSocialDirectory(session.id, searchQuery);
+  const publicUsers = directory.publicUsers;
   const incomingRequests = directory.incomingRequests.filter((request) =>
     matchesSearch(request.sender.displayName, searchQuery),
   );

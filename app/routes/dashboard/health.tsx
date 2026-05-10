@@ -88,12 +88,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const url   = new URL(request.url);
   const now   = new Date();
-  const year  = parseInt(url.searchParams.get("year")  ?? String(now.getFullYear()), 10);
-  const month = parseInt(url.searchParams.get("month") ?? String(now.getMonth() + 1), 10);
+  const year  = Math.max(2000, Math.min(2100, parseInt(url.searchParams.get("year")  ?? "", 10) || now.getFullYear()));
+  const month = Math.max(1,    Math.min(12,   parseInt(url.searchParams.get("month") ?? "", 10) || (now.getMonth() + 1)));
 
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd   = new Date(year, month, 0, 23, 59, 59, 999);
-  const allTime    = new Date(2000, 0, 1);
 
   const [weightLogs, dietLogs, allWeightLogs, pastDietDescriptions] = await Promise.all([
     db.weightLog.findMany({
@@ -105,15 +104,16 @@ export async function loader({ request }: Route.LoaderArgs) {
       orderBy: [{ date: "desc" }, { mealType: "asc" }],
     }),
     db.weightLog.findMany({
-      where:   { userId: user.id, date: { gte: allTime } },
-      orderBy: { date: "asc" },
-      take:    90,
+      where:   { userId: user.id },
+      orderBy: { date: "desc" },
+      take:    30,
     }),
     db.dietLog.findMany({
-      where:   { userId: user.id },
-      select:  { description: true },
-      orderBy: { createdAt: "desc" },
-      take:    200,
+      where:    { userId: user.id },
+      select:   { description: true },
+      distinct: ["description"],
+      orderBy:  { createdAt: "desc" },
+      take:     100,
     }),
   ]);
 
@@ -126,8 +126,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const firstW      = weights[weights.length - 1] ?? null;
   const weightDelta = currentW !== null && firstW !== null ? +(currentW - firstW).toFixed(2) : null;
 
-  // Last 30 weight entries for trend chart
-  const weightTrend = allWeightLogs.slice(-30).map((w) => ({
+  // Last 30 weight entries for trend chart (query returns desc, reverse to asc for chart)
+  const weightTrend = [...allWeightLogs].reverse().map((w) => ({
     date:   w.date.toISOString().slice(0, 10),
     weight: Number(w.weightKg),
   }));
@@ -181,7 +181,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       mealCounts, habitCounts,
     },
     weightTrend,
-    pastDescriptions: [...new Set(pastDietDescriptions.map((d) => d.description))].slice(0, 100),
+    pastDescriptions: pastDietDescriptions.map((d) => d.description),
     year, month,
     today: now.toISOString().slice(0, 10),
   };
@@ -199,7 +199,7 @@ export async function action({ request }: Route.ActionArgs) {
   const user = await getAuthenticatedUser(request);
   if (!user) throw redirect("/login");
 
-  await rateLimit(`health:${user.id}`, 60, 30);
+  await rateLimit({ key: `health:${user.id}`, limit: 60, windowSec: 30 });
 
   const form   = await request.formData();
   const intent = form.get("intent") as string;

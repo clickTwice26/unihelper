@@ -51,16 +51,23 @@ function isKnownPrismaError(error: unknown, code: string) {
   );
 }
 
-export async function getSocialDirectory(viewerId: string): Promise<{
+export async function getSocialDirectory(
+  viewerId: string,
+  searchQuery = "",
+): Promise<{
   publicUsers: SocialDirectoryUser[];
   incomingRequests: IncomingBuddyRequest[];
   acceptedBuddies: AcceptedBuddy[];
 }> {
+  const trimmedSearch = searchQuery.trim().slice(0, 100);
   const [publicUsers, pendingRequests, connections] = await Promise.all([
     db.user.findMany({
       where: {
         isPublic: true,
         NOT: { id: viewerId },
+        ...(trimmedSearch
+          ? { displayName: { contains: trimmedSearch, mode: "insensitive" } }
+          : {}),
       },
       select: {
         id: true,
@@ -69,6 +76,7 @@ export async function getSocialDirectory(viewerId: string): Promise<{
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.buddyRequest.findMany({
       where: {

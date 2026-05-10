@@ -39,6 +39,7 @@ export async function action({ request }: Route.ActionArgs) {
     updateUserProfile,
     updateUserPassword,
     updateUserSettings,
+    destroyOtherSessions,
   } = await import("~/lib/auth.server");
   const { serializeFlash } = await import("~/lib/flash.server");
   const { rateLimit } = await import("~/lib/ratelimit.server");
@@ -113,7 +114,8 @@ export async function action({ request }: Route.ActionArgs) {
 
     try {
       await updateUserPassword(session.id, { currentPassword, newPassword });
-      throw await flash("success", "Password changed successfully.");
+      await destroyOtherSessions(request);
+      throw await flash("success", "Password changed. All other devices have been logged out.");
     } catch (err) {
       if (err instanceof Response) throw err;
       if (err instanceof Error && err.message === "WRONG_PASSWORD") {

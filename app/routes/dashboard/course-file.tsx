@@ -48,13 +48,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     const { getR2Client } = await import("~/lib/r2.server");
     const { env } = await import("~/lib/env.server");
 
-    const safeFileName = file.name.replace(/"/g, "'");
+    const safeFileName = encodeURIComponent(file.name);
     const signedUrl = await getSignedUrl(
       getR2Client(),
       new GetObjectCommand({
         Bucket: env.R2_BUCKET,
         Key: file.key,
-        ResponseContentDisposition: `attachment; filename="${safeFileName}"`,
+        ResponseContentDisposition: `attachment; filename*=UTF-8''${safeFileName}`,
       }),
       { expiresIn: 300 },
     );

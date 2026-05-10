@@ -80,9 +80,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const url        = new URL(request.url);
   const now        = new Date();
-  const year       = parseInt(url.searchParams.get("year")  ?? String(now.getFullYear()), 10);
-  const month      = parseInt(url.searchParams.get("month") ?? String(now.getMonth() + 1), 10);
-  const filterCat  = url.searchParams.get("cat") as Category | null;
+  const year       = Math.max(2000, Math.min(2100, parseInt(url.searchParams.get("year")  ?? "", 10) || now.getFullYear()));
+  const month      = Math.max(1,    Math.min(12,   parseInt(url.searchParams.get("month") ?? "", 10) || (now.getMonth() + 1)));
+  const rawCat     = url.searchParams.get("cat");
+  const filterCat  = (CATEGORIES as readonly string[]).includes(rawCat ?? "") ? rawCat as Category : null;
   const filterType = (url.searchParams.get("type") as TxType | "ALL" | null) ?? "ALL";
 
   const monthStart     = new Date(year, month - 1, 1);
@@ -132,31 +133,42 @@ export async function loader({ request }: Route.LoaderArgs) {
     categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
   }
 
-  // Monthly totals Jan–Dec (income + expense separately)
-  const monthlyExpTotals = Array.from({ length: 12 }, (_, i) =>
-    yearRows.filter((e) => e.type === "EXPENSE" && new Date(e.date).getMonth() === i).reduce((s, e) => s + Number(e.amount), 0)
-  );
-  const monthlyIncTotals = Array.from({ length: 12 }, (_, i) =>
-    yearRows.filter((e) => e.type === "INCOME" && new Date(e.date).getMonth() === i).reduce((s, e) => s + Number(e.amount), 0)
-  );
+  // Monthly totals Jan–Dec — single pass over yearRows
+  const monthlyExpTotals = Array(12).fill(0) as number[];
+  const monthlyIncTotals = Array(12).fill(0) as number[];
+  for (const r of yearRows) {
+    const m = new Date(r.date).getMonth();
+    if (r.type === "EXPENSE") monthlyExpTotals[m] += Number(r.amount);
+    else monthlyIncTotals[m] += Number(r.amount);
+  }
 
-  // Daily expense totals for current month
+  // Daily expense totals for current month — single pass
   const daysInMonth = new Date(year, month, 0).getDate();
-  const dailyTotals = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = i + 1;
-    return thisMonthExpenses.filter((e) => new Date(e.date).getDate() === d).reduce((s, e) => s + Number(e.amount), 0);
-  });
+  const dailyTotals = Array(daysInMonth).fill(0) as number[];
+  for (const e of thisMonthExpenses) {
+    const d = new Date(e.date).getDate() - 1;
+    if (d >= 0 && d < daysInMonth) dailyTotals[d] += Number(e.amount);
+  }
 
-  // Six-month comparison
-  const sixMonthTotals = six.map(({ m: m2, y: y2, start, end }) => {
-    const rows = sixMonthRows.filter((e) => { const d = new Date(e.date); return d >= start && d <= end; });
-    return {
-      label: `${MONTHS[m2 - 1].slice(0, 3)} ${y2}`,
-      m: m2, y: y2,
-      expense: rows.filter((r) => r.type === "EXPENSE").reduce((s, r) => s + Number(r.amount), 0),
-      income:  rows.filter((r) => r.type === "INCOME").reduce((s, r) => s + Number(r.amount), 0),
-    };
-  });
+  // Six-month comparison — single pass over sixMonthRows
+  const sixMonthMap = new Map<string, { expense: number; income: number }>();
+  for (const { y: y2, m: m2 } of six) {
+    sixMonthMap.set(`${y2}-${m2}`, { expense: 0, income: 0 });
+  }
+  for (const r of sixMonthRows) {
+    const d = new Date(r.date);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    const bucket = sixMonthMap.get(key);
+    if (bucket) {
+      if (r.type === "EXPENSE") bucket.expense += Number(r.amount);
+      else bucket.income += Number(r.amount);
+    }
+  }
+  const sixMonthTotals = six.map(({ m: m2, y: y2 }) => ({
+    label: `${MONTHS[m2 - 1].slice(0, 3)} ${y2}`,
+    m: m2, y: y2,
+    ...(sixMonthMap.get(`${y2}-${m2}`) ?? { expense: 0, income: 0 }),
+  }));
 
   const daysWithData = dailyTotals.filter((d) => d > 0).length;
   const avgPerDay    = daysWithData > 0 ? thisMonthExpTotal / daysWithData : 0;

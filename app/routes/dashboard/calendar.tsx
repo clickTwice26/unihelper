@@ -49,39 +49,47 @@ export async function loader({ request }: Route.LoaderArgs) {
   const courseIds = courses.map((c) => c.id);
   const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.title]));
 
+  // Fetch events within a bounded date range: 2 years back → 3 years forward.
+  // This prevents loading all historical data while covering any practical
+  // calendar navigation a student would do.
+  const now = new Date();
+  const rangeStart = new Date(now.getFullYear() - 2, 0, 1);
+  const rangeEnd   = new Date(now.getFullYear() + 3, 11, 31, 23, 59, 59, 999);
+
   // Always fetch tasks (user-scoped). Only fetch course events when user has courses.
   const [quizzes, assignments, midExams, finalExams, tasks, presentations] = await Promise.all([
     courseIds.length > 0
       ? db.quiz.findMany({
-          where: { courseId: { in: courseIds } },
+          where: { courseId: { in: courseIds }, quizDate: { gte: rangeStart, lte: rangeEnd } },
           select: { id: true, title: true, quizDate: true, courseId: true, serial: true },
         })
       : Promise.resolve([]),
     courseIds.length > 0
       ? db.assignment.findMany({
-          where: { courseId: { in: courseIds } },
+          where: { courseId: { in: courseIds }, deadline: { gte: rangeStart, lte: rangeEnd } },
           select: { id: true, title: true, deadline: true, courseId: true },
         })
       : Promise.resolve([]),
     courseIds.length > 0
       ? db.midExam.findMany({
-          where: { courseId: { in: courseIds } },
+          where: { courseId: { in: courseIds }, examDate: { gte: rangeStart, lte: rangeEnd } },
           select: { id: true, examDate: true, courseId: true },
         })
       : Promise.resolve([]),
     courseIds.length > 0
       ? db.finalExam.findMany({
-          where: { courseId: { in: courseIds } },
+          where: { courseId: { in: courseIds }, examDate: { gte: rangeStart, lte: rangeEnd } },
           select: { id: true, examDate: true, courseId: true },
         })
       : Promise.resolve([]),
     db.task.findMany({
-      where: { userId: session.id, deadline: { not: null } },
+      where: { userId: session.id, deadline: { not: null, gte: rangeStart, lte: rangeEnd } },
       select: { id: true, title: true, deadline: true },
+      take: 500,
     }),
     courseIds.length > 0
       ? db.presentation.findMany({
-          where: { courseId: { in: courseIds } },
+          where: { courseId: { in: courseIds }, presentationDate: { gte: rangeStart, lte: rangeEnd } },
           select: { id: true, title: true, presentationDate: true, courseId: true },
         })
       : Promise.resolve([]),

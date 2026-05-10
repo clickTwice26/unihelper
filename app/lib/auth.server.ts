@@ -61,6 +61,25 @@ async function destroySessionByToken(token: string | null) {
   });
 }
 
+/**
+ * Invalidates all sessions for a user except the one that is currently active.
+ * Called after a password change so other devices are forced to re-authenticate.
+ */
+export async function destroyOtherSessions(request: Request) {
+  const currentToken = await getSessionToken(request);
+  if (!currentToken) return;
+
+  const session = await db.session.findUnique({
+    where: { token: currentToken },
+    select: { userId: true },
+  });
+  if (!session) return;
+
+  await db.session.deleteMany({
+    where: { userId: session.userId, NOT: { token: currentToken } },
+  });
+}
+
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const derivedKey = (await scrypt(password, salt, 64)) as Buffer;
