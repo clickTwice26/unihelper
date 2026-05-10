@@ -4,7 +4,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { getAuthenticatedUser } = await import("~/lib/auth.server");
   const { rateLimit } = await import("~/lib/ratelimit.server");
   const { db } = await import("~/lib/db.server");
-  const { storeMessage, makePairKey, CHAT_MAX_LENGTH } = await import("~/lib/chat.server");
+  const { decryptTransportText, storeMessage, makePairKey, CHAT_MAX_LENGTH } = await import("~/lib/chat.server");
 
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -17,14 +17,12 @@ export async function action({ request }: Route.ActionArgs) {
 
   const formData = await request.formData();
   const buddyId = String(formData.get("buddyId") ?? "").trim();
-  const text = String(formData.get("text") ?? "").trim();
+  const iv = String(formData.get("iv") ?? "").trim();
+  const ct = String(formData.get("ct") ?? "").trim();
+  const tag = String(formData.get("tag") ?? "").trim();
 
-  if (!buddyId || !text) {
+  if (!buddyId || !iv || !ct || !tag) {
     return new Response("Bad Request", { status: 400 });
-  }
-
-  if (text.length > CHAT_MAX_LENGTH) {
-    return new Response("Message too long", { status: 400 });
   }
 
   // Verify the two users are actually accepted buddies — server constructs the pairKey
@@ -32,6 +30,21 @@ export async function action({ request }: Route.ActionArgs) {
   const connection = await db.buddyConnection.findUnique({ where: { pairKey } });
   if (!connection) {
     return new Response("Forbidden", { status: 403 });
+  }
+
+  let text: string;
+  try {
+    text = decryptTransportText({ iv, ct, tag }, pairKey).trim();
+  } catch {
+    return new Response("Bad Request", { status: 400 });
+  }
+
+  if (!text) {
+    return new Response("Bad Request", { status: 400 });
+  }
+
+  if (text.length > CHAT_MAX_LENGTH) {
+    return new Response("Message too long", { status: 400 });
   }
 
   await storeMessage(pairKey, user.id, text);

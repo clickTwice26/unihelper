@@ -1,10 +1,11 @@
 /**
- * chat.server.ts — End-to-end encrypted ephemeral chat
+ * chat.server.ts — Server-managed encrypted ephemeral chat
  *
  * Security model:
- *  - Every buddy pair has a deterministic room key: HMAC-SHA256(SESSION_SECRET, pairKey)
- *  - The ENTIRE payload (id, senderId, text, ts, expiresAt) is serialised to JSON
- *    then encrypted as one AES-256-GCM blob with a random 12-byte IV per message.
+ *  - Every buddy pair has deterministic AES keys derived from SESSION_SECRET.
+ *  - The browser encrypts outbound message text before POSTing it to the API.
+ *  - The server decrypts that transport payload, then re-encrypts the full message
+ *    payload for Redis as one AES-256-GCM blob with a random 12-byte IV.
  *  - Redis stores ONLY { iv, ct, tag } — no plaintext field of any kind.
  *  - The sorted-set score is `expiresAt` (unix ms) — a bare number with no content,
  *    required so ZREMRANGEBYSCORE can prune expired entries server-side.
@@ -18,6 +19,7 @@ import { env } from "~/lib/env.server";
 
 export const CHAT_TTL_SECONDS = 180; // 3 minutes per message
 export const CHAT_MAX_LENGTH = 2000; // characters
+export type ChatTransportEnvelope = { iv: string; ct: string; tag: string };
 
 // ── Key derivation ────────────────────────────────────────────────────────────
 
@@ -29,11 +31,35 @@ function roomEncKey(pairKey: string): Buffer {
     .digest(); // 32 bytes
 }
 
+function roomTransportKey(pairKey: string): Buffer {
+  return crypto
+    .createHmac("sha256", env.SESSION_SECRET)
+    .update(`unibuddy:chat:transport:${pairKey}`)
+    .digest(); // 32 bytes
+}
+
+export function getTransportKeyHex(pairKey: string): string {
+  return roomTransportKey(pairKey).toString("hex");
+}
+
+export function decryptTransportText(envelope: ChatTransportEnvelope, pairKey: string): string {
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    roomTransportKey(pairKey),
+    Buffer.from(envelope.iv, "base64"),
+  );
+  decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(envelope.ct, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
 // ── Encryption helpers ────────────────────────────────────────────────────────
 
-type Envelope = { iv: string; ct: string; tag: string };
+type StoredEnvelope = { iv: string; ct: string; tag: string };
 
-function encrypt(plaintext: string, key: Buffer): Envelope {
+function encrypt(plaintext: string, key: Buffer): StoredEnvelope {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -44,7 +70,7 @@ function encrypt(plaintext: string, key: Buffer): Envelope {
   };
 }
 
-function decrypt(envelope: Envelope, key: Buffer): string {
+function decrypt(envelope: StoredEnvelope, key: Buffer): string {
   const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(envelope.iv, "hex"));
   decipher.setAuthTag(Buffer.from(envelope.tag, "hex"));
   return Buffer.concat([
@@ -124,7 +150,7 @@ export async function fetchMessages(pairKey: string): Promise<ChatMessage[]> {
 
   for (const member of raw) {
     try {
-      const envelope = JSON.parse(member) as Envelope;
+      const envelope = JSON.parse(member) as StoredEnvelope;
       const innerJson = decrypt(envelope, key);
       const inner = JSON.parse(innerJson) as ChatMessage;
       messages.push(inner);

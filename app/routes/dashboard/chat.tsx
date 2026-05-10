@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useLoaderData } from "react-router";
 import {
   MessageCircle,
@@ -7,10 +7,13 @@ import {
   Clock,
   Users,
   Lock,
+  Eye,
+  EyeOff,
+  Trash2,
 } from "lucide-react";
 
 import type { Route } from "./+types/chat";
-import type { ChatMessage } from "~/lib/chat.server";
+import type { ChatMessage, ChatTransportEnvelope } from "~/lib/chat.server";
 
 export function meta() {
   return [{ title: "Chat | UniBuddy" }];
@@ -30,7 +33,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { redirect } = await import("react-router");
   const { rateLimit } = await import("~/lib/ratelimit.server");
   const { db } = await import("~/lib/db.server");
-  const { fetchMessages, makePairKey } = await import("~/lib/chat.server");
+  const { fetchMessages, getTransportKeyHex, makePairKey } = await import("~/lib/chat.server");
 
   const user = await getAuthenticatedUser(request);
   if (!user) throw redirect("/login");
@@ -52,6 +55,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     const other = c.userA.id === user.id ? c.userB : c.userA;
     return { id: other.id, displayName: other.displayName };
   });
+  const transportKeys = Object.fromEntries(
+    buddies.map((buddy) => {
+      const pairKey = makePairKey(user.id, buddy.id);
+      return [buddy.id, getTransportKeyHex(pairKey)];
+    }),
+  );
 
   // If ?with=buddyId is set, verify it's a real buddy and return messages
   const url = new URL(request.url);
@@ -63,7 +72,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     messages = await fetchMessages(pairKey);
   }
 
-  return { buddies, messages, userId: user.id };
+  return { buddies, messages, transportKeys, userId: user.id };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,32 +81,172 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatRemaining(expiresAt: number, now: number): string {
-  const ms = expiresAt - now;
-  if (ms <= 0) return "expired";
-  const s = Math.ceil(ms / 1000);
-  const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
-}
-
 function initials(displayName: string | null, id: string): string {
   if (displayName) return displayName.slice(0, 2).toUpperCase();
   return id.slice(0, 2).toUpperCase();
 }
 
+function hexToArrayBuffer(hex: string): ArrayBuffer {
+  if (hex.length % 2 !== 0) throw new Error("Invalid transport key");
+  const buffer = new ArrayBuffer(hex.length / 2);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16);
+  }
+  return buffer;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+const transportEncoder = new TextEncoder();
+
+async function encryptTransportText(text: string, keyHex: string): Promise<ChatTransportEnvelope> {
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    hexToArrayBuffer(keyHex),
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"],
+  );
+  const sealed = new Uint8Array(
+    await globalThis.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      transportEncoder.encode(text),
+    ),
+  );
+  const tagLength = 16;
+  return {
+    iv: bytesToBase64(iv),
+    ct: bytesToBase64(sealed.slice(0, sealed.length - tagLength)),
+    tag: bytesToBase64(sealed.slice(sealed.length - tagLength)),
+  };
+}
+
+// ── Demo / privacy scrambler ──────────────────────────────────────────────────
+
+const FAKE_WORDS = [
+  "meeting", "tomorrow", "assignment", "lecture", "notes", "campus", "library",
+  "study", "project", "deadline", "professor", "exam", "schedule", "review",
+  "okay", "sure", "thanks", "great", "sounds", "good", "perfect", "nice",
+  "yeah", "maybe", "definitely", "absolutely", "probably", "anyway", "right",
+  "homework", "tutorial", "session", "quiz", "seminar", "class", "topic",
+  "video", "slides", "reading", "chapter", "concept", "theory", "practice",
+];
+
+function hashInt(seed: string, index: number): number {
+  let h = 0;
+  const s = seed + ":" + index;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(31, h) + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
+
+function scrambleText(text: string, id: string): string {
+  return text
+    .split(/\s+/)
+    .map((word, i) => {
+      const near = FAKE_WORDS.filter((w) => Math.abs(w.length - word.length) <= 2);
+      const pool = near.length > 0 ? near : FAKE_WORDS;
+      return pool[hashInt(id, i) % pool.length];
+    })
+    .join(" ");
+}
+
+// ── Isolated expiry countdown — owns its own clock so it never re-renders parent ──
+
+const ExpiryTimer = memo(function ExpiryTimer({ expiresAt }: { expiresAt: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const ms = expiresAt - now;
+  if (ms <= 0) return null;
+  const s = Math.ceil(ms / 1000);
+  const m = Math.floor(s / 60);
+  const label = m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+  const urgency = ms < 30_000;
+
+  return (
+    <span
+      className={`flex items-center gap-0.5 text-[10px] font-medium ${
+        urgency ? "text-red-500 animate-pulse" : "text-slate-400"
+      }`}
+    >
+      <Clock size={8} />
+      {label}
+    </span>
+  );
+});
+
+// ── Memoized message bubble — skips re-render unless its own props change ─────
+
+const MessageBubble = memo(function MessageBubble({
+  msg,
+  isOwn,
+  demoMode,
+}: {
+  msg: ChatMessage;
+  isOwn: boolean;
+  demoMode: boolean;
+}) {
+  return (
+    <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[72%] flex flex-col gap-0.5 ${isOwn ? "items-end" : "items-start"}`}>
+        <div
+          className={`rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm ${
+            isOwn
+              ? "rounded-br-sm bg-indigo-600 text-white"
+              : "rounded-bl-sm bg-white text-slate-800 border border-slate-200"
+          }`}
+        >
+          {demoMode ? scrambleText(msg.text, msg.id) : msg.text}
+        </div>
+        <div className={`flex items-center gap-1.5 px-1 ${isOwn ? "flex-row-reverse" : ""}`}>
+          <span className="text-[10px] text-slate-400">{formatTime(msg.ts)}</span>
+          <ExpiryTimer expiresAt={msg.expiresAt} />
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
-  const { buddies, messages: initialMessages, userId } = useLoaderData<typeof loader>();
+  const { buddies, messages: initialMessages, transportKeys, userId } = useLoaderData<typeof loader>();
 
   const [activeBuddyId, setActiveBuddyId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+  const [demoMode, setDemoMode] = useState(false);
+  const [clearedAt, setClearedAt] = useState<number>(0);
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
-  // Ticking clock for countdown display + expired-message pruning
+  // Stable message store: keyed by id so polls only add/update, never replace wholesale
+  const [messageMap, setMessageMap] = useState<Map<string, ChatMessage>>(() => {
+    const m = new Map<string, ChatMessage>();
+    initialMessages.forEach((msg) => m.set(msg.id, msg));
+    return m;
+  });
+
+  // Slow clock — only used to prune truly expired messages from the list.
+  // Per-second countdown display is handled inside ExpiryTimer, isolated from this component.
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(id);
   }, []);
 
@@ -107,12 +256,40 @@ export default function ChatPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevCountRef = useRef(0);
 
-  // Messages: prefer live fetcher data over initial loader data
-  const allMessages = (msgFetcher.data?.messages ?? initialMessages) as ChatMessage[];
-  const liveMessages = allMessages.filter((m) => m.expiresAt > now);
+  // Merge fetcher results into the stable map — no wholesale replacement
+  useEffect(() => {
+    const incoming = msgFetcher.data?.messages;
+    if (!incoming) return;
+    setMessageMap((prev) => {
+      // Bail out early if nothing actually changed (same IDs + same content)
+      let changed = false;
+      for (const msg of incoming) {
+        const existing = prev.get(msg.id);
+        if (!existing || existing.text !== msg.text) { changed = true; break; }
+      }
+      if (!changed && incoming.length === prev.size) return prev;
+
+      const next = new Map(prev);
+      incoming.forEach((msg) => next.set(msg.id, msg));
+      return next;
+    });
+  }, [msgFetcher.data]);
+
+  // Reset message map when buddy changes
+  useEffect(() => {
+    setMessageMap(new Map());
+    setClearedAt(0);
+  }, [activeBuddyId]);
+
+  const liveMessages = useMemo(() => {
+    const sorted = Array.from(messageMap.values()).sort((a, b) => a.ts - b.ts);
+    return sorted.filter((m) => m.expiresAt > now && m.ts > clearedAt);
+  }, [messageMap, now, clearedAt]);
 
   const activeBuddy = buddies.find((b) => b.id === activeBuddyId) ?? null;
+  const activeTransportKey = activeBuddyId ? transportKeys[activeBuddyId] ?? null : null;
 
   // Load messages when buddy changes
   useEffect(() => {
@@ -131,9 +308,12 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBuddyId]);
 
-  // Scroll to bottom when messages update
+  // Scroll to bottom only when a genuinely new message arrives
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (liveMessages.length > prevCountRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevCountRef.current = liveMessages.length;
   }, [liveMessages.length]);
 
   // Focus input when buddy selected
@@ -146,23 +326,40 @@ export default function ChatPage() {
     setMobileView("chat");
   }
 
-  function handleSend() {
-    if (!activeBuddyId || !input.trim() || sendFetcher.state !== "idle") return;
-    const fd = new FormData();
-    fd.append("buddyId", activeBuddyId);
-    fd.append("text", input.trim());
-    sendFetcher.submit(fd, { method: "post", action: "/api/chat/send" });
-    setInput("");
-    // Eagerly reload messages after a short delay to capture the new message
-    setTimeout(() => {
-      if (activeBuddyId) msgFetcher.load(`/dashboard/chat?with=${activeBuddyId}`);
-    }, 300);
+  async function handleSend() {
+    const buddyId = activeBuddyId;
+    const text = input.trim();
+    const transportKey = buddyId ? transportKeys[buddyId] : null;
+
+    if (!buddyId || !text || !transportKey || sendFetcher.state !== "idle" || isEncrypting) return;
+
+    setIsEncrypting(true);
+    setSendError(null);
+
+    try {
+      const envelope = await encryptTransportText(text, transportKey);
+      const fd = new FormData();
+      fd.append("buddyId", buddyId);
+      fd.append("iv", envelope.iv);
+      fd.append("ct", envelope.ct);
+      fd.append("tag", envelope.tag);
+      sendFetcher.submit(fd, { method: "post", action: "/api/chat/send" });
+      setInput("");
+      // Eagerly reload messages after a short delay to capture the new message
+      setTimeout(() => {
+        msgFetcher.load(`/dashboard/chat?with=${buddyId}`);
+      }, 300);
+    } catch {
+      setSendError("Couldn't encrypt this message. Reload and try again.");
+    } finally {
+      setIsEncrypting(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   }
 
@@ -187,7 +384,7 @@ export default function ChatPage() {
         {/* Encrypted badge */}
         <div className="mx-4 mb-3 flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5">
           <Lock size={10} className="text-indigo-400" />
-          <p className="text-[10px] font-medium text-indigo-500">AES-256-GCM · 3-min TTL</p>
+          <p className="text-[10px] font-medium text-indigo-500">AES-256-GCM submit + storage · 3-min TTL</p>
         </div>
 
         {/* List */}
@@ -206,9 +403,7 @@ export default function ChatPage() {
                   key={buddy.id}
                   onClick={() => selectBuddy(buddy.id)}
                   className={`flex w-full items-center gap-3 px-5 py-3 text-left transition-colors ${
-                    isActive
-                      ? "bg-indigo-50"
-                      : "hover:bg-slate-50"
+                    isActive ? "bg-indigo-50" : "hover:bg-slate-50"
                   }`}
                 >
                   <div
@@ -239,7 +434,7 @@ export default function ChatPage() {
       >
         {activeBuddy ? (
           <>
-            {/* Chat header — sits on white, flush top */}
+            {/* Chat header */}
             <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-5 py-3">
               <button
                 type="button"
@@ -257,16 +452,43 @@ export default function ChatPage() {
                 </p>
                 <div className="flex items-center gap-1">
                   <ShieldCheck size={9} className="text-emerald-500" />
-                  <span className="text-[10px] text-slate-400">End-to-end encrypted · vanishes in 3 min</span>
+                  <span className="text-[10px] text-slate-400">Encrypted on submit · vanishes in 3 min</span>
                 </div>
               </div>
               {msgFetcher.state !== "idle" && (
                 <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
               )}
+              {/* Demo mode toggle */}
+              <button
+                type="button"
+                onClick={() => setDemoMode((d) => !d)}
+                title={demoMode ? "Hide demo chat" : "Show demo chat"}
+                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-medium transition ${
+                  demoMode
+                    ? "bg-amber-100 text-amber-600 hover:bg-amber-200"
+                    : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                }`}
+              >
+                {demoMode ? <EyeOff size={11} /> : <Eye size={11} />}
+                {demoMode ? "Demo ON" : "Demo"}
+              </button>
+              {/* Clear button */}
+              <button
+                type="button"
+                onClick={() => setClearedAt(Date.now())}
+                title="Clear all messages"
+                className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+              >
+                <Trash2 size={11} />
+                Clear
+              </button>
             </div>
 
             {/* Messages — scrollable middle */}
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-3">
+            <div
+              className="flex-1 overflow-y-auto px-5 py-5 space-y-3"
+              style={{ overflowAnchor: "auto" }}
+            >
               {liveMessages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                   <Lock size={24} className="text-slate-200" />
@@ -274,34 +496,14 @@ export default function ChatPage() {
                   <p className="text-xs text-slate-300">Messages auto-delete after 3 minutes.</p>
                 </div>
               ) : (
-                liveMessages.map((msg) => {
-                  const isOwn = msg.senderId === userId;
-                  const remaining = formatRemaining(msg.expiresAt, now);
-                  const urgency = msg.expiresAt - now < 30_000;
-
-                  return (
-                    <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[72%] flex flex-col gap-0.5 ${isOwn ? "items-end" : "items-start"}`}>
-                        <div
-                          className={`rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm ${
-                            isOwn
-                              ? "rounded-br-sm bg-indigo-600 text-white"
-                              : "rounded-bl-sm bg-white text-slate-800 border border-slate-200"
-                          }`}
-                        >
-                          {msg.text}
-                        </div>
-                        <div className={`flex items-center gap-1.5 px-1 ${isOwn ? "flex-row-reverse" : ""}`}>
-                          <span className="text-[10px] text-slate-400">{formatTime(msg.ts)}</span>
-                          <span className={`flex items-center gap-0.5 text-[10px] font-medium ${urgency ? "text-red-500 animate-pulse" : "text-slate-400"}`}>
-                            <Clock size={8} />
-                            {remaining}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+                liveMessages.map((msg) => (
+                  <MessageBubble
+                    key={msg.id}
+                    msg={msg}
+                    isOwn={msg.senderId === userId}
+                    demoMode={demoMode}
+                  />
+                ))
               )}
               <div ref={bottomRef} />
             </div>
@@ -323,13 +525,18 @@ export default function ChatPage() {
                 )}
                 <button
                   type="button"
-                  disabled={!input.trim() || sendFetcher.state !== "idle"}
-                  onClick={handleSend}
+                  disabled={!input.trim() || !activeTransportKey || sendFetcher.state !== "idle" || isEncrypting}
+                  onClick={() => {
+                    void handleSend();
+                  }}
                   className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:opacity-40"
                 >
                   <Send size={13} />
                 </button>
               </div>
+              {sendError ? (
+                <p className="mt-2 px-1 text-[11px] text-red-500">{sendError}</p>
+              ) : null}
             </div>
           </>
         ) : (
@@ -338,7 +545,7 @@ export default function ChatPage() {
             <MessageCircle size={32} className="text-slate-200" />
             <div>
               <p className="text-sm font-bold text-slate-700">Select a buddy to chat</p>
-              <p className="mt-1 text-xs text-slate-400">Messages are encrypted and vanish after 3 minutes.</p>
+              <p className="mt-1 text-xs text-slate-400">Messages are encrypted before storage and vanish after 3 minutes.</p>
             </div>
             <div className="mt-2 flex flex-col gap-2 text-[11px] text-slate-400 w-full max-w-xs">
               <div className="flex items-center gap-2 rounded-lg bg-white border border-slate-100 px-3 py-2">
@@ -351,7 +558,7 @@ export default function ChatPage() {
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-white border border-slate-100 px-3 py-2">
                 <Lock size={12} className="text-indigo-400 flex-shrink-0" />
-                <span>Keys never stored</span>
+                <span>Pair keys are derived, not persisted</span>
               </div>
             </div>
           </div>
