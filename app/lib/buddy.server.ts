@@ -58,6 +58,7 @@ export async function getSocialDirectory(
   publicUsers: SocialDirectoryUser[];
   incomingRequests: IncomingBuddyRequest[];
   acceptedBuddies: AcceptedBuddy[];
+  viewerHasBuddy: boolean;
 }> {
   const trimmedSearch = searchQuery.trim().slice(0, 100);
   const [publicUsers, pendingRequests, connections] = await Promise.all([
@@ -137,6 +138,7 @@ export async function getSocialDirectory(
   });
 
   const buddyIds = new Set(acceptedBuddies.map((buddy) => buddy.id));
+  const viewerHasBuddy = acceptedBuddies.length > 0;
 
   const outgoingRequests = new Map<string, string>();
   const incomingRequests = new Map<string, string>();
@@ -162,6 +164,9 @@ export async function getSocialDirectory(
       } else if (outgoingRequests.has(user.id)) {
         relation = "outgoing";
         requestId = outgoingRequests.get(user.id) ?? null;
+      } else if (viewerHasBuddy) {
+        // Viewer already has a buddy — can't send new requests
+        relation = "closed";
       } else if (!user.acceptRequests) {
         relation = "closed";
       }
@@ -172,6 +177,7 @@ export async function getSocialDirectory(
         requestId,
       };
     }),
+    viewerHasBuddy,
     incomingRequests: pendingRequests
       .filter((request) => request.receiverId === viewerId)
       .map((request) => ({
@@ -196,13 +202,19 @@ export async function sendBuddyRequest(senderId: string, receiverId: string) {
 
   try {
     return await db.$transaction(async (tx) => {
-      const [targetUser, existingConnection, existingRequest] = await Promise.all([
+      const [targetUser, existingConnection, existingRequest, senderConnection, receiverConnection] = await Promise.all([
         tx.user.findUnique({
           where: { id: receiverId },
           select: { id: true, isPublic: true, acceptRequests: true },
         }),
         tx.buddyConnection.findUnique({ where: { pairKey } }),
         tx.buddyRequest.findUnique({ where: { pairKey } }),
+        tx.buddyConnection.findFirst({
+          where: { OR: [{ userAId: senderId }, { userBId: senderId }] },
+        }),
+        tx.buddyConnection.findFirst({
+          where: { OR: [{ userAId: receiverId }, { userBId: receiverId }] },
+        }),
       ]);
 
       if (!targetUser) {
@@ -219,6 +231,14 @@ export async function sendBuddyRequest(senderId: string, receiverId: string) {
 
       if (existingConnection) {
         throw new Error("ALREADY_BUDDIES");
+      }
+
+      if (senderConnection) {
+        throw new Error("SENDER_HAS_BUDDY");
+      }
+
+      if (receiverConnection) {
+        throw new Error("RECEIVER_HAS_BUDDY");
       }
 
       if (!existingRequest) {
@@ -295,6 +315,24 @@ export async function acceptBuddyRequest(receiverId: string, requestId: string) 
 
       const { userAId, userBId } = getCanonicalPair(request.senderId, request.receiverId);
 
+      // Enforce one-buddy-per-user at accept time too
+      const [receiverConnection, senderConnection] = await Promise.all([
+        tx.buddyConnection.findFirst({
+          where: { OR: [{ userAId: request.receiverId }, { userBId: request.receiverId }] },
+        }),
+        tx.buddyConnection.findFirst({
+          where: { OR: [{ userAId: request.senderId }, { userBId: request.senderId }] },
+        }),
+      ]);
+
+      if (receiverConnection) {
+        throw new Error("RECEIVER_HAS_BUDDY");
+      }
+
+      if (senderConnection) {
+        throw new Error("SENDER_HAS_BUDDY");
+      }
+
       await tx.buddyConnection.upsert({
         where: { pairKey: request.pairKey },
         create: {
@@ -320,4 +358,23 @@ export async function acceptBuddyRequest(receiverId: string, requestId: string) 
 
     throw error;
   }
+}
+
+export async function removeBuddy(actorId: string, buddyId: string) {
+  if (!actorId || !buddyId) throw new Error("INVALID_REQUEST");
+  if (actorId === buddyId) throw new Error("INVALID_REQUEST");
+
+  const { pairKey } = getCanonicalPair(actorId, buddyId);
+
+  const connection = await db.buddyConnection.findUnique({ where: { pairKey } });
+  if (!connection) throw new Error("NOT_BUDDIES");
+  if (connection.userAId !== actorId && connection.userBId !== actorId) {
+    throw new Error("FORBIDDEN");
+  }
+
+  await db.$transaction([
+    db.buddyConnection.delete({ where: { pairKey } }),
+    // Remove the accepted request so either party can re-request later
+    db.buddyRequest.deleteMany({ where: { pairKey } }),
+  ]);
 }

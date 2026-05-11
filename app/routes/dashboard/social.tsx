@@ -84,6 +84,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     publicUsers,
     incomingRequests,
     acceptedBuddies,
+    viewerHasBuddy: directory.viewerHasBuddy,
     activeTab: resolveActiveTab(url.searchParams.get("tab")),
     searchQuery,
   };
@@ -93,7 +94,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { getAuthenticatedUser } = await import("~/lib/auth.server");
   const { serializeFlash } = await import("~/lib/flash.server");
   const { rateLimit } = await import("~/lib/ratelimit.server");
-  const { acceptBuddyRequest, sendBuddyRequest } = await import("~/lib/buddy.server");
+  const { acceptBuddyRequest, sendBuddyRequest, removeBuddy } = await import("~/lib/buddy.server");
   const { redirect } = await import("react-router");
 
   const session = await getAuthenticatedUser(request);
@@ -151,6 +152,8 @@ export async function action({ request }: Route.ActionArgs) {
           REQUEST_ALREADY_SENT: "You've already sent this buddy request.",
           REQUEST_ALREADY_EXISTS: "A buddy request already exists for this pair.",
           INCOMING_REQUEST_EXISTS: "This user already sent you a request. Accept it below.",
+          SENDER_HAS_BUDDY: "You already have a buddy. Remove your current buddy first.",
+          RECEIVER_HAS_BUDDY: "That person already has a buddy.",
           INVALID_REQUEST: "Invalid buddy request.",
         };
 
@@ -179,6 +182,8 @@ export async function action({ request }: Route.ActionArgs) {
           FORBIDDEN_REQUEST: "You can't accept that buddy request.",
           REQUEST_NOT_PENDING: "That buddy request was already handled.",
           ALREADY_BUDDIES: "You're already buddies.",
+          RECEIVER_HAS_BUDDY: "You already have a buddy. Remove your current buddy first.",
+          SENDER_HAS_BUDDY: "That person already has a buddy.",
           INVALID_REQUEST: "Invalid buddy request.",
         };
 
@@ -192,11 +197,30 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
+  if (intent === "remove") {
+    const buddyId = String(formData.get("buddyId") ?? "").trim();
+    try {
+      await removeBuddy(session.id, buddyId);
+      throw await flash("success", "Buddy removed.");
+    } catch (error) {
+      if (error instanceof Response) throw error;
+      if (error instanceof Error) {
+        const messages: Record<string, string> = {
+          NOT_BUDDIES: "You are not buddies with that user.",
+          FORBIDDEN: "You can't remove that buddy.",
+          INVALID_REQUEST: "Invalid request.",
+        };
+        throw await flash("error", messages[error.message] ?? "Failed to remove buddy.");
+      }
+      throw await flash("error", "Failed to remove buddy.");
+    }
+  }
+
   throw await flash("error", "Unknown action.");
 }
 
 export default function SocialPage() {
-  const { publicUsers, incomingRequests, acceptedBuddies, activeTab, searchQuery } =
+  const { publicUsers, incomingRequests, acceptedBuddies, viewerHasBuddy, activeTab, searchQuery } =
     useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const activeIntent = String(navigation.formData?.get("intent") ?? "");
@@ -433,13 +457,27 @@ export default function SocialPage() {
                   <p>Member since {new Date(buddy.createdAt).getFullYear()}</p>
                 </div>
 
-                <Link
-                  to={`/dashboard/courses?view=${buddy.id}`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-                >
-                  <BookOpen size={13} />
-                  View Courses
-                </Link>
+                <div className="flex gap-2">
+                  <Link
+                    to={`/dashboard/courses?view=${buddy.id}`}
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                  >
+                    <BookOpen size={13} />
+                    View Courses
+                  </Link>
+                  <Form method="post" preventScrollReset>
+                    <input type="hidden" name="intent" value="remove" />
+                    <input type="hidden" name="buddyId" value={buddy.id} />
+                    <input type="hidden" name="tab" value="buddies" />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                      title="Remove buddy"
+                    >
+                      Remove
+                    </button>
+                  </Form>
+                </div>
               </div>
             );
           })}
@@ -453,6 +491,15 @@ export default function SocialPage() {
           </div>
           <p className="text-base font-semibold text-slate-700">{discoverEmptyTitle}</p>
           <p className="max-w-xs text-sm text-slate-500">{discoverEmptyMessage}</p>
+        </div>
+      ) : null}
+
+      {activeTab === "discover" && viewerHasBuddy ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <UserCheck size={18} className="shrink-0 text-amber-600" />
+          <p className="text-sm font-medium text-amber-800">
+            You already have a buddy. You can only have one buddy at a time — remove your current buddy from the <strong>Buddies</strong> tab first to add someone new.
+          </p>
         </div>
       ) : null}
 
@@ -519,7 +566,7 @@ export default function SocialPage() {
                   {user.relation === "closed" ? (
                     <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-500">
                       <Lock size={15} />
-                      Requests unavailable
+                      {user.acceptRequests ? "Already has a buddy" : "Not accepting requests"}
                     </div>
                   ) : null}
 

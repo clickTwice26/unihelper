@@ -3,9 +3,9 @@ import { Form, Link, Outlet, useRouteLoaderData } from "react-router";
 import type { loader as rootLoader } from "~/root";
 
 const navItems = [
-  { href: "/#overview", label: "Overview" },
-  { href: "/#runtime", label: "Runtime" },
-  { href: "/#next-steps", label: "Next Steps" },
+  { href: "/#features", label: "Features" },
+  { href: "/#buddies", label: "Buddies" },
+  { href: "/#more", label: "More" },
 ];
 
 export default function MarketingLayout() {
@@ -21,7 +21,7 @@ export default function MarketingLayout() {
             <span>
               <span className="type-brand block text-slate-900">UniBuddy</span>
               <span className="type-caption block text-slate-500">
-                Remix-style full-stack workspace
+                Your university life, organised
               </span>
             </span>
           </Link>
