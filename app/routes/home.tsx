@@ -138,11 +138,7 @@ export default function HomePage() {
         className="mx-auto max-w-7xl px-6 pb-24 pt-36 sm:px-8 sm:pt-40 lg:px-10"
       >
         <div className="mx-auto max-w-3xl text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5">
-            <GraduationCap size={14} className="text-emerald-600" />
-            <span className="type-overline text-emerald-700">Built for university students</span>
-          </div>
-
+       
           <h1 className="type-display-hero text-slate-900">
             Your entire university life,{" "}
             <span

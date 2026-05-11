@@ -1,7 +1,13 @@
+import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
 import { Check, ClipboardCheck, Clock, X } from "lucide-react";
 
 import type { AttendanceState } from "../types";
+
+function todayDateKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 
 const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -47,13 +53,21 @@ export function AttendanceTab({
   const isSubmitting = navigation.state === "submitting";
   const submittingDate = String(navigation.formData?.get("date") ?? "");
   const submittingState = String(navigation.formData?.get("attendanceState") ?? "");
+  const todayKey = todayDateKey();
+  const todayRef = useRef<HTMLDivElement>(null);
 
-  // Compute stats
-  const total = classDates.length;
+  // Scroll to today's row on mount
+  useEffect(() => {
+    todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  // Stats only count past + today (can't attend future classes)
+  const pastDates = classDates.filter((d) => d <= todayKey);
+  const total = pastDates.length;
   let presentCount = 0;
   let lateCount = 0;
   let absentCount = 0;
-  for (const d of classDates) {
+  for (const d of pastDates) {
     const s = getState(d, attendanceMap);
     if (s === "present") presentCount++;
     else if (s === "late") {
@@ -123,6 +137,16 @@ export function AttendanceTab({
         </div>
       </div>
 
+      {/* Upcoming count notice */}
+      {classDates.filter((d) => d > todayKey).length > 0 && (
+        <p className="text-xs text-slate-400">
+          Stats reflect {total} past class{total !== 1 ? "es" : ""} ·{" "}
+          <span className="font-medium text-slate-500">
+            {classDates.filter((d) => d > todayKey).length} upcoming scheduled
+          </span>
+        </p>
+      )}
+
       {/* Attendance bar */}
       {total > 0 && (
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
@@ -176,20 +200,39 @@ export function AttendanceTab({
           const { dayAbbr, formatted } = localDateParts(dateKey);
           const current = getState(dateKey, attendanceMap);
           const isPending = isSubmitting && submittingDate === dateKey;
+          const isToday = dateKey === todayKey;
+          const isFuture = dateKey > todayKey;
 
           return (
             <div
               key={dateKey}
-              className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+              ref={isToday ? todayRef : undefined}
+              className={`flex flex-col gap-3 rounded-xl border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+                isToday
+                  ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200"
+                  : isFuture
+                    ? "border-slate-200 bg-slate-50 opacity-70"
+                    : "border-slate-200 bg-white"
+              }`}
             >
               {/* Date info */}
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                <div className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg ${
+                  isToday ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
+                }`}>
                   <span className="text-[10px] font-semibold uppercase leading-none">{dayAbbr}</span>
                   <span className="mt-0.5 text-sm font-bold leading-none">{dateKey.slice(8)}</span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{formatted}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{formatted}</p>
+                    {isToday && (
+                      <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold text-white">Today</span>
+                    )}
+                    {isFuture && (
+                      <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-400">Upcoming</span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400">{dayAbbr}day class</p>
                 </div>
               </div>

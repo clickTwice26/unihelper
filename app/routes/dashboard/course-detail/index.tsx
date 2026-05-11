@@ -215,16 +215,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
     const classDates: string[] = [];
     if (hasRoutine) {
+      // Show at least 6 months of class days from creation — including future dates
+      const sixMonthsAfterCreation = new Date(course.createdAt);
+      sixMonthsAfterCreation.setMonth(sixMonthsAfterCreation.getMonth() + 6);
+      const endDate = new Date(Math.max(Date.now(), sixMonthsAfterCreation.getTime()));
+
       type DateRow = { date: Date };
       const rows = await db.$queryRaw<DateRow[]>`
         SELECT gs::date AS date
         FROM generate_series(
           ${course.createdAt}::date,
-          CURRENT_DATE,
+          ${endDate}::date,
           '1 day'::interval
         ) AS gs
         WHERE EXTRACT(DOW FROM gs) = ANY(${daysOfWeek}::int[])
-        ORDER BY gs DESC
+        ORDER BY gs ASC
       `;
       for (const row of rows) {
         const d = new Date(row.date);
