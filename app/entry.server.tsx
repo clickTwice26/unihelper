@@ -96,8 +96,13 @@ export default function handleRequest(
             "Content-Security-Policy",
             [
               "default-src 'self'",
-              // React Router passes this nonce to its inline hydration scripts.
-              `script-src 'self' 'nonce-${nonce}'`,
+              // In production, Vite outputs external JS bundles — no inline scripts exist
+              // except React Router's hydration script, which receives the nonce.
+              // In development, Vite injects its own inline HMR scripts that have no nonce,
+              // so we fall back to 'unsafe-inline' to avoid breaking the dev server.
+              process.env.NODE_ENV === "production"
+                ? `script-src 'self' 'nonce-${nonce}'`
+                : "script-src 'self' 'unsafe-inline'",
               // Tailwind inlines style attributes; Google Fonts needs style-src
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
