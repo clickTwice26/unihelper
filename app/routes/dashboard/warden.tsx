@@ -224,7 +224,7 @@ const KIND_CONFIG: Record<
   mid: {
     label: "Mid Exam",
     icon: BookMarked,
-    rule: "Begin revision at least 1 week before the exam date",
+    rule: "Do a mock exam within 1 week of the actual exam date",
     urgentCls: "border-red-200 bg-red-50",
     normalCls: "border-slate-200 bg-white",
     iconCls: "text-red-500",
@@ -232,7 +232,7 @@ const KIND_CONFIG: Record<
   final: {
     label: "Final Exam",
     icon: GraduationCap,
-    rule: "Begin revision at least 1 week before the exam date",
+    rule: "Do a mock exam within 1 week of the actual exam date",
     urgentCls: "border-red-200 bg-red-50",
     normalCls: "border-slate-200 bg-white",
     iconCls: "text-red-500",
@@ -260,12 +260,12 @@ const GUIDELINES: Array<{
   {
     kind: "mid",
     threshold: "1 week before",
-    description: "Start revising at least 1 week before your mid exam date.",
+    description: "Do a mock mid exam within 1 week of the actual exam date to test your readiness.",
   },
   {
     kind: "final",
     threshold: "1 week before",
-    description: "Start revising at least 1 week before your final exam date.",
+    description: "Do a mock final exam within 1 week of the actual exam date to test your readiness.",
   },
   {
     kind: "assignment",

@@ -215,7 +215,29 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw redirect("/login");
   }
 
-  return { user };
+  const { db } = await import("~/lib/db.server");
+  const now = new Date();
+
+  const courseIds = (await db.course.findMany({
+    where: { ownerId: user.id, deletedAt: null },
+    select: { id: true },
+  })).map((c) => c.id);
+
+  let wardenAlertCount = 0;
+  if (courseIds.length > 0) {
+    const day3 = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const day7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const [quizCount, assignCount, midCount, finalCount, presCount] = await Promise.all([
+      db.quiz.count({ where: { courseId: { in: courseIds }, quizDate: { gte: now, lte: day3 } } }),
+      db.assignment.count({ where: { courseId: { in: courseIds }, deadline: { gte: now, lte: day3 } } }),
+      db.midExam.count({ where: { courseId: { in: courseIds }, examDate: { gte: now, lte: day7 } } }),
+      db.finalExam.count({ where: { courseId: { in: courseIds }, examDate: { gte: now, lte: day7 } } }),
+      db.presentation.count({ where: { courseId: { in: courseIds }, presentationDate: { gte: now, lte: day7 } } }),
+    ]);
+    wardenAlertCount = quizCount + assignCount + midCount + finalCount + presCount;
+  }
+
+  return { user, wardenAlertCount };
 }
 
 const navItemsSimple: Array<{
@@ -245,7 +267,7 @@ const footerItems: Array<{
 }> = [];
 
 export default function DashboardLayout() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, wardenAlertCount } = useLoaderData<typeof loader>();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { pathname } = useLocation();
@@ -483,6 +505,23 @@ export default function DashboardLayout() {
           <GlobalSearch />
 
           <div className="flex items-center gap-3 sm:gap-4">
+            <Link
+              to="/dashboard/warden"
+              className={`relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                pathname.startsWith("/dashboard/warden")
+                  ? "bg-indigo-50 text-indigo-600"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              }`}
+              aria-label="Warden"
+            >
+              <ShieldCheck size={17} className="shrink-0" />
+              <span className="hidden sm:inline">Warden</span>
+              {wardenAlertCount > 0 && (
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                  {wardenAlertCount > 9 ? "9+" : wardenAlertCount}
+                </span>
+              )}
+            </Link>
             <button className="text-slate-500 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-md transition-colors" aria-label="Notifications">
               <Bell size={20} />
             </button>
