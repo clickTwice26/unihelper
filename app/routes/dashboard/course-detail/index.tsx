@@ -93,7 +93,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     quizDate: Date;
     deadline: Date | null;
     createdAt: Date;
+    myMockQuiz: {
+      id: string;
+      questionImageKey: string | null;
+      questionImageName: string | null;
+      answerImageKey: string | null;
+      answerImageName: string | null;
+      notes: string | null;
+    } | null;
+    buddyMockQuiz: {
+      id: string;
+      questionImageKey: string | null;
+      questionImageName: string | null;
+      answerImageKey: string | null;
+      answerImageName: string | null;
+      notes: string | null;
+    } | null;
   }[] = [];
+  let quizBuddyDisplayName: string | null = null;
   let assignments: {
     id: string;
     title: string;
@@ -144,7 +161,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   if (activeTab === "quiz") {
-    quizzes = await db.quiz.findMany({
+    // Find the buddy of the course owner so we can show their mock test too
+    let quizBuddyId: string | null = null;
+    const conn = await db.buddyConnection.findFirst({
+      where: { OR: [{ userAId: course.ownerId }, { userBId: course.ownerId }] },
+      select: { userAId: true, userBId: true },
+    });
+    if (conn) {
+      quizBuddyId = conn.userAId === course.ownerId ? conn.userBId : conn.userAId;
+      const buddy = await db.user.findUnique({ where: { id: quizBuddyId }, select: { displayName: true } });
+      quizBuddyDisplayName = buddy?.displayName ?? null;
+    }
+
+    const rawQuizzes = await db.quiz.findMany({
       where: { courseId },
       orderBy: [{ serial: "asc" }, { createdAt: "asc" }],
       select: {
@@ -155,8 +184,31 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         quizDate: true,
         deadline: true,
         createdAt: true,
+        mockQuizzes: {
+          where: { ownerId: { in: [session.id, ...(quizBuddyId ? [quizBuddyId] : [])] } },
+          select: {
+            id: true,
+            ownerId: true,
+            questionImageKey: true,
+            questionImageName: true,
+            answerImageKey: true,
+            answerImageName: true,
+            notes: true,
+          },
+        },
       },
     });
+    quizzes = rawQuizzes.map((q) => ({
+      id: q.id,
+      serial: q.serial,
+      title: q.title,
+      syllabus: q.syllabus,
+      quizDate: q.quizDate,
+      deadline: q.deadline,
+      createdAt: q.createdAt,
+      myMockQuiz: q.mockQuizzes.find((mq) => mq.ownerId === session.id) ?? null,
+      buddyMockQuiz: quizBuddyId ? (q.mockQuizzes.find((mq) => mq.ownerId === quizBuddyId) ?? null) : null,
+    }));
   }
 
   if (activeTab === "assignment") {
@@ -295,6 +347,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     storagePath,
     r2PublicUrl,
     quizzes,
+    quizBuddyDisplayName,
     assignments,
     midExam,
     finalExam,
@@ -490,9 +543,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     let nextSerial = 1;
     while (usedSerials.has(nextSerial)) nextSerial++;
 
-    await db.quiz.create({
+    const newQuiz = await db.quiz.create({
       data: { courseId, title, syllabus, quizDate, deadline, serial: nextSerial },
+      select: { id: true },
     });
+    // Auto-initialise mock quiz for the logged-in user
+    await db.mockQuiz.create({ data: { quizId: newQuiz.id, ownerId: session.id } });
     throw await flash("success", `Quiz "${title}" logged.`);
   }
 
@@ -567,6 +623,148 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
     await db.quiz.delete({ where: { id: quizId } });
     throw await flash("success", "Quiz deleted.");
+  }
+
+  // ── Mock Quiz: set question photo ─────────────────────────────────────
+  if (intent === "set-mock-question") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    const quiz = await db.quiz.findUnique({ where: { id: quizId }, select: { courseId: true } });
+    if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
+
+    const raw = formData.get("questionImage");
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      typeof (raw as { arrayBuffer?: unknown }).arrayBuffer !== "function"
+    )
+      throw await flash("error", "No image provided.");
+    const file = raw as unknown as { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> };
+    if (file.size === 0) throw await flash("error", "No image provided.");
+    if (file.size > 10 * 1024 * 1024) throw await flash("error", "Image must be under 10 MB.");
+    if (!file.type.startsWith("image/")) throw await flash("error", "Only image files are allowed.");
+
+    const uuid = crypto.randomUUID();
+    const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const key = `mock-quiz/${courseId}/${quizId}/q-${uuid}.${ext}`;
+
+    const { getR2Client } = await import("~/lib/r2.server");
+    const { PutObjectCommand, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    const { env } = await import("~/lib/env.server");
+
+    // Delete old question + answer images if present
+    const existing = await db.mockQuiz.findUnique({ where: { quizId_ownerId: { quizId, ownerId: session.id } }, select: { questionImageKey: true, answerImageKey: true } });
+    for (const oldKey of [existing?.questionImageKey, existing?.answerImageKey].filter(Boolean) as string[]) {
+      try { await getR2Client().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: oldKey })); } catch { /* ignore */ }
+    }
+
+    await getR2Client().send(new PutObjectCommand({
+      Bucket: env.R2_BUCKET, Key: key,
+      Body: Buffer.from(await file.arrayBuffer()),
+      ContentType: file.type, ContentLength: file.size,
+    }));
+
+    await db.mockQuiz.upsert({
+      where: { quizId_ownerId: { quizId, ownerId: session.id } },
+      create: { quizId, ownerId: session.id, questionImageKey: key, questionImageName: file.name.slice(0, 200), answerImageKey: null, answerImageName: null, notes: null },
+      update: { questionImageKey: key, questionImageName: file.name.slice(0, 200), answerImageKey: null, answerImageName: null, notes: null },
+    });
+    throw await flash("success", "Question photo saved.");
+  }
+
+  // ── Mock Quiz: set answer photo ────────────────────────────────────────
+  if (intent === "set-mock-answer") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    const notes = String(formData.get("notes") ?? "").trim().slice(0, 2000) || null;
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    const quiz = await db.quiz.findUnique({ where: { id: quizId }, select: { courseId: true } });
+    if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
+    const mockQuiz = await db.mockQuiz.findUnique({ where: { quizId_ownerId: { quizId, ownerId: session.id } }, select: { id: true, questionImageKey: true, answerImageKey: true } });
+    if (!mockQuiz?.questionImageKey) throw await flash("error", "Upload the question photo first.");
+
+    const raw = formData.get("answerImage");
+    let key: string | null = mockQuiz.answerImageKey;
+    let name: string | null = null;
+
+    if (
+      raw &&
+      typeof raw === "object" &&
+      typeof (raw as { arrayBuffer?: unknown }).arrayBuffer === "function"
+    ) {
+      const file = raw as unknown as { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> };
+      if (file.size > 0) {
+        if (file.size > 10 * 1024 * 1024) throw await flash("error", "Image must be under 10 MB.");
+        if (!file.type.startsWith("image/")) throw await flash("error", "Only image files are allowed.");
+        const uuid = crypto.randomUUID();
+        const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        key = `mock-quiz/${courseId}/${quizId}/a-${uuid}.${ext}`;
+        name = file.name.slice(0, 200);
+        const { getR2Client } = await import("~/lib/r2.server");
+        const { PutObjectCommand, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+        const { env } = await import("~/lib/env.server");
+        if (mockQuiz.answerImageKey) {
+          try { await getR2Client().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: mockQuiz.answerImageKey })); } catch { /* ignore */ }
+        }
+        await getR2Client().send(new PutObjectCommand({
+          Bucket: env.R2_BUCKET, Key: key,
+          Body: Buffer.from(await file.arrayBuffer()),
+          ContentType: file.type, ContentLength: file.size,
+        }));
+      }
+    }
+
+    await db.mockQuiz.update({
+      where: { quizId_ownerId: { quizId, ownerId: session.id } },
+      data: { answerImageKey: key, answerImageName: name, notes },
+    });
+    throw await flash("success", "Answer saved.");
+  }
+
+  // ── Mock Quiz: delete question (resets entire Q&A) ─────────────────────
+  if (intent === "delete-mock-question") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    const quiz = await db.quiz.findUnique({ where: { id: quizId }, select: { courseId: true } });
+    if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
+    const mq = await db.mockQuiz.findUnique({ where: { quizId_ownerId: { quizId, ownerId: session.id } }, select: { questionImageKey: true, answerImageKey: true } });
+    if (!mq) throw await flash("error", "No mock quiz found.");
+    const keysToDelete = [mq.questionImageKey, mq.answerImageKey].filter(Boolean) as string[];
+    if (keysToDelete.length > 0) {
+      try {
+        const { getR2Client } = await import("~/lib/r2.server");
+        const { DeleteObjectsCommand } = await import("@aws-sdk/client-s3");
+        const { env } = await import("~/lib/env.server");
+        await getR2Client().send(new DeleteObjectsCommand({
+          Bucket: env.R2_BUCKET,
+          Delete: { Objects: keysToDelete.map((Key) => ({ Key })), Quiet: true },
+        }));
+      } catch { /* ignore */ }
+    }
+    await db.mockQuiz.update({ where: { quizId_ownerId: { quizId, ownerId: session.id } }, data: { questionImageKey: null, questionImageName: null, answerImageKey: null, answerImageName: null, notes: null } });
+    throw await flash("success", "Mock quiz cleared.");
+  }
+
+  // ── Mock Quiz: delete answer only ──────────────────────────────────────
+  if (intent === "delete-mock-answer") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    const quiz = await db.quiz.findUnique({ where: { id: quizId }, select: { courseId: true } });
+    if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
+    const mq = await db.mockQuiz.findUnique({ where: { quizId_ownerId: { quizId, ownerId: session.id } }, select: { answerImageKey: true } });
+    if (mq?.answerImageKey) {
+      try {
+        const { getR2Client } = await import("~/lib/r2.server");
+        const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+        const { env } = await import("~/lib/env.server");
+        await getR2Client().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: mq.answerImageKey }));
+      } catch { /* ignore */ }
+    }
+    await db.mockQuiz.update({ where: { quizId_ownerId: { quizId, ownerId: session.id } }, data: { answerImageKey: null, answerImageName: null, notes: null } });
+    throw await flash("success", "Answer removed.");
   }
 
   // ── Assignment: create ─────────────────────────────────────────────
@@ -874,6 +1072,7 @@ export default function CourseDetailPage() {
     storagePath,
     r2PublicUrl,
     quizzes,
+    quizBuddyDisplayName,
     assignments,
     midExam,
     finalExam,
@@ -1112,6 +1311,8 @@ export default function CourseDetailPage() {
             courseId={course.id}
             quizzes={quizzes as QuizEntry[]}
             navigation={navigation}
+            r2PublicUrl={r2PublicUrl}
+            buddyDisplayName={quizBuddyDisplayName}
           />
         ) : null}
 

@@ -50,6 +50,7 @@ model User {
   dietLogs            DietLog[]
   personalFiles       PersonalFile[]
   attendances         Attendance[]
+  mockQuizzes         MockQuiz[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -179,11 +180,30 @@ model Quiz {
   syllabus  String    @db.Text
   quizDate  DateTime
   deadline  DateTime?
-  course    Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  mockQuizzes MockQuiz[]
+  createdAt   DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   @@index([courseId, serial])
+}
+
+// One Q&A pair per user per quiz. Each buddy uploads their own mock test independently.
+model MockQuiz {
+  id                String   @id @default(cuid())
+  quizId            String
+  quiz              Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  ownerId           String
+  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  questionImageKey  String?
+  questionImageName String?
+  answerImageKey    String?
+  answerImageName   String?
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([quizId, ownerId])
 }
 
 model Assignment {

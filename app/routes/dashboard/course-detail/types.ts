@@ -46,6 +46,15 @@ export type StorageFile = {
   courseId: string;
 };
 
+export type MockQuizData = {
+  id: string;
+  questionImageKey: string | null;
+  questionImageName: string | null;
+  answerImageKey: string | null;
+  answerImageName: string | null;
+  notes: string | null;
+} | null;
+
 export type QuizEntry = {
   id: string;
   serial: number;
@@ -54,6 +63,8 @@ export type QuizEntry = {
   quizDate: Date | string;
   deadline: Date | string | null;
   createdAt: Date | string;
+  myMockQuiz: MockQuizData;
+  buddyMockQuiz: MockQuizData;
 };
 
 export type AssignmentEntry = {
