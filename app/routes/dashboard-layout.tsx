@@ -19,6 +19,7 @@ import {
   FileText,
   Loader2,
   MessageCircle,
+  ShieldCheck,
 } from "lucide-react";
 
 import type { Route } from "./+types/dashboard-layout";
@@ -234,6 +235,7 @@ const navItemsSimple: Array<{
   { label: "Health", to: "/dashboard/health", icon: HeartPulse, end: false },
   { label: "Storage", to: "/dashboard/storage", icon: HardDrive, end: false },
   { label: "Chat", to: "/dashboard/chat", icon: MessageCircle, end: false },
+  { label: "Warden", to: "/dashboard/warden", icon: ShieldCheck, end: false },
 ];
 
 const footerItems: Array<{
@@ -260,6 +262,7 @@ export default function DashboardLayout() {
     if (pathname.startsWith("/dashboard/health")) return "Health Tracker";
     if (pathname.startsWith("/dashboard/storage")) return "Storage";
     if (pathname.startsWith("/dashboard/chat")) return "Chat";
+    if (pathname.startsWith("/dashboard/warden")) return "Warden";
     const segment = pathname.split("/").filter(Boolean).pop() ?? "Dashboard";
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   })();

@@ -128,6 +128,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     classDates: string[];
     hasRoutine: boolean;
     attendanceMap: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>;
+    buddyAttendanceMap: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>;
+    buddyDisplayName: string | null;
   } | null = null;
 
   if (activeTab === "storage") {
@@ -240,10 +242,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       }
     }
 
-    const records = await db.attendance.findMany({
-      where: { userId: session.id, courseId },
-      select: { date: true, status: true, timing: true },
-    });
+    const [records, buddyConn] = await Promise.all([
+      db.attendance.findMany({
+        where: { userId: session.id, courseId },
+        select: { date: true, status: true, timing: true },
+      }),
+      db.buddyConnection.findFirst({
+        where: { OR: [{ userAId: session.id }, { userBId: session.id }] },
+        select: { userAId: true, userBId: true },
+      }),
+    ]);
 
     const attendanceMap: Record<
       string,
@@ -253,7 +261,28 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       attendanceMap[rec.date] = { status: rec.status, timing: rec.timing };
     }
 
-    attendanceData = { classDates, hasRoutine, attendanceMap };
+    let buddyAttendanceMap: Record<
+      string,
+      { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }
+    > = {};
+    let buddyDisplayName: string | null = null;
+
+    if (buddyConn) {
+      const buddyId = buddyConn.userAId === session.id ? buddyConn.userBId : buddyConn.userAId;
+      const [buddyRecords, buddyUser] = await Promise.all([
+        db.attendance.findMany({
+          where: { userId: buddyId, courseId },
+          select: { date: true, status: true, timing: true },
+        }),
+        db.user.findUnique({ where: { id: buddyId }, select: { displayName: true } }),
+      ]);
+      buddyDisplayName = buddyUser?.displayName ?? "Your Buddy";
+      for (const rec of buddyRecords) {
+        buddyAttendanceMap[rec.date] = { status: rec.status, timing: rec.timing };
+      }
+    }
+
+    attendanceData = { classDates, hasRoutine, attendanceMap, buddyAttendanceMap, buddyDisplayName };
   }
 
   const r2PublicUrl = (await import("~/lib/env.server")).env.R2_PUBLIC_URL.replace(/\/$/, "");
@@ -1137,6 +1166,13 @@ export default function CourseDetailPage() {
                 { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }
               >
             }
+            buddyAttendanceMap={
+              (attendanceData?.buddyAttendanceMap ?? {}) as Record<
+                string,
+                { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }
+              >
+            }
+            buddyDisplayName={(attendanceData?.buddyDisplayName as string | null) ?? null}
             navigation={navigation}
           />
         ) : null}

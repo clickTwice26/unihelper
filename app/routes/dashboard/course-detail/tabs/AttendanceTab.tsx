@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
-import { Check, ClipboardCheck, Clock, Lock, X } from "lucide-react";
+import { Check, ClipboardCheck, Clock, Lock, User, X } from "lucide-react";
 
 import type { AttendanceState } from "../types";
 
@@ -51,6 +51,8 @@ export function AttendanceTab({
   classDates,
   hasRoutine,
   attendanceMap,
+  buddyAttendanceMap = {},
+  buddyDisplayName = null,
   navigation,
 }: {
   courseId: string;
@@ -58,6 +60,8 @@ export function AttendanceTab({
   classDates: string[];
   hasRoutine: boolean;
   attendanceMap: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>;
+  buddyAttendanceMap?: Record<string, { status: "PRESENT" | "ABSENT"; timing: "ON_TIME" | "LATE" }>;
+  buddyDisplayName?: string | null;
   navigation: ReturnType<typeof useNavigation>;
 }) {
   const isSubmitting = navigation.state === "submitting";
@@ -87,6 +91,23 @@ export function AttendanceTab({
   }
   const attendedCount = presentCount;
   const attendancePct = total > 0 ? Math.round((attendedCount / total) * 100) : 0;
+
+  // Buddy stats (read-only, past dates only)
+  const hasBuddy = buddyDisplayName !== null && buddyDisplayName !== undefined;
+  let buddyPresent = 0;
+  let buddyLate = 0;
+  let buddyAbsent = 0;
+  if (hasBuddy) {
+    for (const d of pastDates) {
+      const s = getState(d, buddyAttendanceMap);
+      if (s === "present") buddyPresent++;
+      else if (s === "late") {
+        buddyPresent++;
+        buddyLate++;
+      } else if (s === "absent") buddyAbsent++;
+    }
+  }
+  const buddyPct = total > 0 ? Math.round((buddyPresent / total) * 100) : 0;
 
   if (!hasRoutine) {
     return (
@@ -157,6 +178,50 @@ export function AttendanceTab({
         </p>
       )}
 
+      {/* Buddy comparison */}
+      {hasBuddy && (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+            <User size={14} className="text-indigo-500" />
+            <p className="text-xs font-semibold text-slate-700">
+              {buddyDisplayName || "Your Buddy"}&rsquo;s Attendance
+            </p>
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-slate-100 px-0 py-0">
+            <div className="px-4 py-3 text-center">
+              <p className="text-lg font-bold text-slate-800">{buddyPresent}</p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Present</p>
+            </div>
+            <div className="px-4 py-3 text-center">
+              <p className="text-lg font-bold text-amber-500">{buddyLate}</p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Late</p>
+            </div>
+            <div className="px-4 py-3 text-center">
+              <p className="text-lg font-bold text-red-500">{buddyAbsent}</p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Absent</p>
+            </div>
+            <div className="px-4 py-3 text-center">
+              <p className={`text-lg font-bold ${
+                buddyPct >= 75 ? "text-emerald-600" : buddyPct >= 50 ? "text-amber-600" : "text-red-600"
+              }`}>{buddyPct}%</p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Rate</p>
+            </div>
+          </div>
+          {total > 0 && (
+            <div className="border-t border-slate-100 px-4 py-2.5">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    buddyPct >= 75 ? "bg-emerald-500" : buddyPct >= 50 ? "bg-amber-400" : "bg-red-500"
+                  }`}
+                  style={{ width: `${buddyPct}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Attendance bar */}
       {total > 0 && (
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
@@ -209,6 +274,7 @@ export function AttendanceTab({
         {classDates.map((dateKey) => {
           const { dayAbbr, formatted } = localDateParts(dateKey);
           const current = getState(dateKey, attendanceMap);
+          const buddyState = hasBuddy ? getState(dateKey, buddyAttendanceMap) : null;
           const isPending = isSubmitting && submittingDate === dateKey;
           const isToday = dateKey === todayKey;
           const isFuture = dateKey > todayKey;
@@ -255,6 +321,20 @@ export function AttendanceTab({
                   <p className="text-xs text-slate-400">{dayAbbr}day class</p>
                 </div>
               </div>
+
+              {/* Buddy status pill */}
+              {buddyState !== null && (
+                <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                  <User size={10} className="shrink-0 text-slate-400" />
+                  <span className="text-[10px] font-medium text-slate-400 mr-0.5">
+                    {buddyDisplayName?.split(" ")[0] ?? "Buddy"}:
+                  </span>
+                  {buddyState === "present" && <span className="text-[10px] font-semibold text-emerald-600">Present</span>}
+                  {buddyState === "late" && <span className="text-[10px] font-semibold text-amber-500">Late</span>}
+                  {buddyState === "absent" && <span className="text-[10px] font-semibold text-red-500">Absent</span>}
+                  {buddyState === "unset" && <span className="text-[10px] font-medium text-slate-400">—</span>}
+                </div>
+              )}
 
               {/* Toggle buttons */}
               {locked ? (

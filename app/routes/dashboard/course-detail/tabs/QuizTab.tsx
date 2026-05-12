@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { CalendarDays, ClipboardList, Clock, Edit2, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, ClipboardList, Clock, Edit2, Plus, Trash2, X } from "lucide-react";
 
 import { CustomSelect } from "~/components/ui/select";
 import type { QuizEntry } from "../types";
@@ -48,8 +48,8 @@ export function QuizTab({
   quizzes: QuizEntry[];
   navigation: ReturnType<typeof useNavigation>;
 }) {
-  const [showForm, setShowForm] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState<QuizEntry | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const isSubmitting = navigation.state === "submitting";
   const intent = String(navigation.formData?.get("intent") ?? "");
@@ -97,92 +97,108 @@ export function QuizTab({
         </button>
       </div>
 
-      {/* New quiz form */}
       {showForm ? (
-        <Form
-          key={editingQuiz?.id ?? "new-quiz"}
-          method="post"
-          preventScrollReset
-          className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5"
-        >
-          <input type="hidden" name="intent" value={isEditing ? "update-quiz" : "create-quiz"} />
-          {editingQuiz ? <input type="hidden" name="quizId" value={editingQuiz.id} /> : null}
-          <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
-          <h3 className="mb-4 text-sm font-bold text-slate-800">
-            {isEditing ? "Edit Quiz" : "Log a New Quiz"}
-          </h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Title / Topic</label>
-              <input
-                name="title"
-                type="text"
-                required
-                maxLength={200}
-                defaultValue={editingQuiz?.title ?? ""}
-                placeholder="e.g. Mid-term Chapter 3-5"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={closeForm} aria-hidden="true" />
+          <div className="relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
+              <h2 className="text-base font-semibold text-slate-900">
+                {isEditing ? "Edit Quiz" : "Log a New Quiz"}
+              </h2>
+              <button
+                type="button"
+                onClick={closeForm}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Syllabus / Topics Covered</label>
-              <textarea
-                name="syllabus"
-                required
-                maxLength={2000}
-                rows={3}
-                defaultValue={editingQuiz?.syllabus ?? ""}
-                placeholder="Chapter 3: Arrays, Chapter 4: Linked Lists…"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Date</label>
-              <input
-                name="quizDate"
-                type="date"
-                required
-                defaultValue={editingQuiz ? new Date(editingQuiz.quizDate).toISOString().slice(0, 10) : ""}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Deadline <span className="font-normal text-slate-400">(optional)</span>
-              </label>
-              <input
-                name="deadline"
-                type="datetime-local"
-                defaultValue={
-                  editingQuiz?.deadline
-                    ? new Date(editingQuiz.deadline).toISOString().slice(0, 16)
-                    : ""
-                }
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
+            <div className="overflow-y-auto">
+              <Form
+                key={editingQuiz?.id ?? "new-quiz"}
+                method="post"
+                preventScrollReset
+                className="space-y-4 px-6 py-5"
+              >
+                <input type="hidden" name="intent" value={isEditing ? "update-quiz" : "create-quiz"} />
+                {editingQuiz ? <input type="hidden" name="quizId" value={editingQuiz.id} /> : null}
+                <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Title / Topic</label>
+                  <input
+                    name="title"
+                    type="text"
+                    required
+                    maxLength={200}
+                    defaultValue={editingQuiz?.title ?? ""}
+                    placeholder="e.g. Mid-term Chapter 3-5"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Syllabus / Topics Covered</label>
+                  <textarea
+                    name="syllabus"
+                    required
+                    maxLength={2000}
+                    rows={4}
+                    defaultValue={editingQuiz?.syllabus ?? ""}
+                    placeholder="Chapter 3: Arrays, Chapter 4: Linked Lists…"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Date</label>
+                    <input
+                      name="quizDate"
+                      type="date"
+                      required
+                      defaultValue={editingQuiz ? new Date(editingQuiz.quizDate).toISOString().slice(0, 10) : ""}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      Deadline <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      name="deadline"
+                      type="datetime-local"
+                      defaultValue={
+                        editingQuiz?.deadline
+                          ? new Date(editingQuiz.deadline).toISOString().slice(0, 16)
+                          : ""
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting && intent === (isEditing ? "update-quiz" : "create-quiz")}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {isSubmitting && intent === (isEditing ? "update-quiz" : "create-quiz")
+                      ? "Saving…"
+                      : isEditing
+                        ? "Save Changes"
+                        : "Save Quiz"}
+                  </button>
+                </div>
+              </Form>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={isSubmitting && intent === (isEditing ? "update-quiz" : "create-quiz")}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-            >
-              {isSubmitting && intent === (isEditing ? "update-quiz" : "create-quiz")
-                ? "Saving…"
-                : isEditing
-                  ? "Save Changes"
-                  : "Save Quiz"}
-            </button>
-            <button
-              type="button"
-              onClick={closeForm}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-          </div>
-        </Form>
+        </div>
       ) : null}
 
       {/* Quiz list */}

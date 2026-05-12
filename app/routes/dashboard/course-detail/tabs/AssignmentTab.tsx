@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { Clock, Edit2, FileText, Plus, Trash2 } from "lucide-react";
+import { Clock, Edit2, FileText, Plus, Trash2, X } from "lucide-react";
 
 import type { AssignmentEntry } from "../types";
 
@@ -66,83 +66,94 @@ export function AssignmentTab({
       </div>
 
       {showForm ? (
-        <Form
-          key={editingAssignment?.id ?? "new-assignment"}
-          method="post"
-          preventScrollReset
-          className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5"
-        >
-          <input type="hidden" name="intent" value={isEditing ? "update-assignment" : "create-assignment"} />
-          {editingAssignment ? <input type="hidden" name="assignmentId" value={editingAssignment.id} /> : null}
-          <input
-            type="hidden"
-            name="backHref"
-            value={`/dashboard/courses/${courseId}?tab=assignment`}
-          />
-          <h3 className="mb-4 text-sm font-bold text-slate-800">
-            {isEditing ? "Edit Assignment" : "Add Assignment"}
-          </h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Title</label>
-              <input
-                name="title"
-                type="text"
-                required
-                maxLength={200}
-                defaultValue={editingAssignment?.title ?? ""}
-                placeholder="e.g. Assignment 1 — Sorting Algorithms"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={closeForm} aria-hidden="true" />
+          <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
+              <h2 className="text-base font-semibold text-slate-900">
+                {isEditing ? "Edit Assignment" : "Add Assignment"}
+              </h2>
+              <button
+                type="button"
+                onClick={closeForm}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Description / Instructions
-              </label>
-              <textarea
-                name="description"
-                required
-                maxLength={5000}
-                rows={4}
-                defaultValue={editingAssignment?.description ?? ""}
-                placeholder="Implement QuickSort and MergeSort, submit a report…"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Deadline</label>
-              <input
-                name="deadline"
-                type="datetime-local"
-                required
-                defaultValue={
-                  editingAssignment ? new Date(editingAssignment.deadline).toISOString().slice(0, 16) : ""
-                }
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
+            <div className="overflow-y-auto">
+              <Form
+                key={editingAssignment?.id ?? "new-assignment"}
+                method="post"
+                preventScrollReset
+                className="space-y-4 px-6 py-5"
+              >
+                <input type="hidden" name="intent" value={isEditing ? "update-assignment" : "create-assignment"} />
+                {editingAssignment ? <input type="hidden" name="assignmentId" value={editingAssignment.id} /> : null}
+                <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=assignment`} />
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Title</label>
+                  <input
+                    name="title"
+                    type="text"
+                    required
+                    maxLength={200}
+                    defaultValue={editingAssignment?.title ?? ""}
+                    placeholder="e.g. Assignment 1 — Sorting Algorithms"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Description / Instructions
+                  </label>
+                  <textarea
+                    name="description"
+                    required
+                    maxLength={5000}
+                    rows={4}
+                    defaultValue={editingAssignment?.description ?? ""}
+                    placeholder="Implement QuickSort and MergeSort, submit a report…"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Deadline</label>
+                  <input
+                    name="deadline"
+                    type="datetime-local"
+                    required
+                    defaultValue={
+                      editingAssignment ? new Date(editingAssignment.deadline).toISOString().slice(0, 16) : ""
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeForm}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting && intent === (isEditing ? "update-assignment" : "create-assignment")}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {isSubmitting && intent === (isEditing ? "update-assignment" : "create-assignment")
+                      ? "Saving…"
+                      : isEditing
+                        ? "Save Changes"
+                        : "Save Assignment"}
+                  </button>
+                </div>
+              </Form>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={isSubmitting && intent === (isEditing ? "update-assignment" : "create-assignment")}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-            >
-              {isSubmitting && intent === (isEditing ? "update-assignment" : "create-assignment")
-                ? "Saving…"
-                : isEditing
-                  ? "Save Changes"
-                  : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={closeForm}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-          </div>
-        </Form>
+        </div>
       ) : null}
 
       {assignments.length === 0 && !showForm ? (

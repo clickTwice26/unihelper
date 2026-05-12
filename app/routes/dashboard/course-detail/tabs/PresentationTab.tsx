@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { Edit2, Monitor, Trash2 } from "lucide-react";
+import { Edit2, Monitor, Trash2, X } from "lucide-react";
 
 import type { PresentationEntry } from "../types";
 
@@ -36,7 +36,7 @@ export function PresentationTab({
         <p className="text-sm font-semibold text-slate-700">Presentation Details</p>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => setShowForm(true)}
           className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
         >
           <Edit2 size={13} />
@@ -45,101 +45,119 @@ export function PresentationTab({
       </div>
 
       {showForm ? (
-        <Form
-          method="post"
-          preventScrollReset
-          className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5"
-        >
-          <input type="hidden" name="intent" value="upsert-presentation" />
-          <input type="hidden" name="backHref" value={backHref} />
-          <h3 className="mb-4 text-sm font-bold text-slate-800">
-            {presentation ? "Edit Presentation" : "Set Presentation Details"}
-          </h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Presentation Title / Topic <span className="text-red-500">*</span>
-              </label>
-              <input
-                name="title"
-                type="text"
-                required
-                maxLength={200}
-                defaultValue={presentation?.title ?? ""}
-                placeholder="e.g. Database Normalization Overview"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowForm(false)} aria-hidden="true" />
+          <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
+              <h2 className="text-base font-semibold text-slate-900">
+                {presentation ? "Edit Presentation" : "Set Presentation Details"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Description / What to Cover <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                name="description"
-                required
-                maxLength={5000}
-                rows={4}
-                defaultValue={presentation?.description ?? ""}
-                placeholder="Topics, scope, key points to address…"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Presentation Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                name="presentationDate"
-                type="date"
-                required
-                defaultValue={defaultDate}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Venue <span className="font-normal text-slate-400">(optional)</span>
-              </label>
-              <input
-                name="venue"
-                type="text"
-                maxLength={200}
-                defaultValue={presentation?.venue ?? ""}
-                placeholder="e.g. Seminar Hall, Room 302"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Notes <span className="font-normal text-slate-400">(optional)</span>
-              </label>
-              <textarea
-                name="notes"
-                maxLength={2000}
-                rows={2}
-                defaultValue={presentation?.notes ?? ""}
-                placeholder="Time limit, group members, special instructions…"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
-              />
+            <div className="overflow-y-auto">
+              <Form
+                key={presentation?.id ?? "new-presentation"}
+                method="post"
+                preventScrollReset
+                className="space-y-4 px-6 py-5"
+              >
+                <input type="hidden" name="intent" value="upsert-presentation" />
+                <input type="hidden" name="backHref" value={backHref} />
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Presentation Title / Topic <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    name="title"
+                    type="text"
+                    required
+                    maxLength={200}
+                    defaultValue={presentation?.title ?? ""}
+                    placeholder="e.g. Database Normalization Overview"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Description / What to Cover <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="description"
+                    required
+                    maxLength={5000}
+                    rows={4}
+                    defaultValue={presentation?.description ?? ""}
+                    placeholder="Topics, scope, key points to address…"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      Presentation Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      name="presentationDate"
+                      type="date"
+                      required
+                      defaultValue={defaultDate}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      Venue <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      name="venue"
+                      type="text"
+                      maxLength={200}
+                      defaultValue={presentation?.venue ?? ""}
+                      placeholder="e.g. Seminar Hall, Room 302"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Notes <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <textarea
+                    name="notes"
+                    maxLength={2000}
+                    rows={2}
+                    defaultValue={presentation?.notes ?? ""}
+                    placeholder="Time limit, group members, special instructions…"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting && intent === "upsert-presentation"}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {isSubmitting && intent === "upsert-presentation" ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </Form>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={isSubmitting && intent === "upsert-presentation"}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-            >
-              {isSubmitting && intent === "upsert-presentation" ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-          </div>
-        </Form>
+        </div>
       ) : null}
 
       {!presentation && !showForm ? (
