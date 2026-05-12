@@ -1,12 +1,22 @@
 import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
-import { Check, ClipboardCheck, Clock, X } from "lucide-react";
+import { Check, ClipboardCheck, Clock, Lock, X } from "lucide-react";
 
 import type { AttendanceState } from "../types";
 
 function todayDateKey(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** Returns true if the class date is more than 2 days in the past (attendance locked). */
+function isAttendanceLocked(dateKey: string): boolean {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const classDate = new Date(y, m - 1, d);
+  const cutoff = new Date(classDate);
+  cutoff.setDate(cutoff.getDate() + 2);
+  cutoff.setHours(23, 59, 59, 999);
+  return Date.now() > cutoff.getTime();
 }
 
 const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -202,6 +212,7 @@ export function AttendanceTab({
           const isPending = isSubmitting && submittingDate === dateKey;
           const isToday = dateKey === todayKey;
           const isFuture = dateKey > todayKey;
+          const locked = !isFuture && isAttendanceLocked(dateKey);
 
           return (
             <div
@@ -212,7 +223,9 @@ export function AttendanceTab({
                   ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200"
                   : isFuture
                     ? "border-slate-200 bg-slate-50 opacity-70"
-                    : "border-slate-200 bg-white"
+                    : locked
+                      ? "border-slate-200 bg-slate-50"
+                      : "border-slate-200 bg-white"
               }`}
             >
               {/* Date info */}
@@ -232,12 +245,27 @@ export function AttendanceTab({
                     {isFuture && (
                       <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-400">Upcoming</span>
                     )}
+                    {locked && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                        <Lock size={9} />
+                        Locked
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-400">{dayAbbr}day class</p>
                 </div>
               </div>
 
               {/* Toggle buttons */}
+              {locked ? (
+                <div className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+                  <Lock size={12} />
+                  {current === "present" && <span className="font-medium text-emerald-600">Present</span>}
+                  {current === "late" && <span className="font-medium text-amber-600">Late</span>}
+                  {current === "absent" && <span className="font-medium text-red-500">Absent</span>}
+                  {current === "unset" && <span>Not recorded</span>}
+                </div>
+              ) : (
               <Form method="post" preventScrollReset className="flex shrink-0 items-center gap-1.5">
                 <input type="hidden" name="intent" value="upsert-attendance" />
                 <input type="hidden" name="date" value={dateKey} />
@@ -251,7 +279,7 @@ export function AttendanceTab({
                   type="submit"
                   name="attendanceState"
                   value="present"
-                  disabled={isPending}
+                  disabled={isPending || isFuture}
                   title="Mark Present (on time)"
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
                     current === "present"
@@ -273,7 +301,7 @@ export function AttendanceTab({
                   type="submit"
                   name="attendanceState"
                   value="late"
-                  disabled={isPending}
+                  disabled={isPending || isFuture}
                   title="Mark Late"
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
                     current === "late"
@@ -295,7 +323,7 @@ export function AttendanceTab({
                   type="submit"
                   name="attendanceState"
                   value="absent"
-                  disabled={isPending}
+                  disabled={isPending || isFuture}
                   title="Mark Absent"
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
                     current === "absent"
@@ -313,6 +341,7 @@ export function AttendanceTab({
                   )}
                 </button>
               </Form>
+              )}
             </div>
           );
         })}

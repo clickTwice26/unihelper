@@ -636,6 +636,15 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (!["present", "late", "absent"].includes(state))
       throw await flash("error", "Invalid attendance state.");
 
+    // Lock: cannot change attendance more than 2 days after the class date
+    const [cy, cm, cd] = date.split("-").map(Number);
+    const classDate = new Date(cy, cm - 1, cd);
+    const cutoff = new Date(classDate);
+    cutoff.setDate(cutoff.getDate() + 2);
+    cutoff.setHours(23, 59, 59, 999);
+    if (Date.now() > cutoff.getTime())
+      throw await flash("error", "Attendance for this class can no longer be changed (locked after 2 days).");
+
     const status = state === "absent" ? ("ABSENT" as const) : ("PRESENT" as const);
     const timing = state === "late" ? ("LATE" as const) : ("ON_TIME" as const);
 

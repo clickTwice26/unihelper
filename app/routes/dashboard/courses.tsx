@@ -248,13 +248,13 @@ export async function action({ request }: Route.ActionArgs) {
 
 function CourseCard({
   course,
-  ownerId,
+  isViewingBuddy,
 }: {
   course: Course;
-  ownerId: string;
+  isViewingBuddy: boolean;
 }) {
   const href = `/dashboard/courses/${course.id}${
-    ownerId !== course.ownerId ? `?view=${course.ownerId}` : ""
+    isViewingBuddy ? `?view=${course.ownerId}` : ""
   }`;
 
   return (
@@ -610,7 +610,7 @@ export default function CoursesPage() {
               <CourseCard
                 key={course.id}
                 course={course}
-                ownerId={ownerId}
+                isViewingBuddy={isViewingBuddy}
               />
             ))}
           </div>
