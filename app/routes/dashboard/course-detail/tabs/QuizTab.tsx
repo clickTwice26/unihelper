@@ -461,6 +461,20 @@ export function QuizTab({
   const pendingQuizId = String(navigation.formData?.get("quizId") ?? "");
   const isEditing = editingQuiz !== null;
 
+  const allComplete = quizzes.length === 0 || quizzes.every((quiz) => {
+    const myDone = !!quiz.myMockQuiz?.questionImageKey && !!quiz.myMockQuiz?.answerImageKey;
+    const buddyDone = !buddyDisplayName || (!!quiz.buddyMockQuiz?.questionImageKey && !!quiz.buddyMockQuiz?.answerImageKey);
+    return myDone && buddyDone;
+  });
+  const canAddQuiz = quizzes.length < 4 && allComplete;
+  const addDisabledReason = quizzes.length >= 4
+    ? "Maximum 4 quizzes per course"
+    : !allComplete
+    ? buddyDisplayName
+      ? "Both you and your buddy must complete all mock tests (Q&A) before logging a new quiz"
+      : "Complete all mock tests (Q&A) before logging a new quiz"
+    : undefined;
+
   return (
     <div className="px-6 py-5">
       <div className="mb-4 flex items-center justify-between">
@@ -470,8 +484,8 @@ export function QuizTab({
         <button
           type="button"
           onClick={() => { setEditingQuiz(null); setShowForm(true); }}
-          disabled={quizzes.length >= 4}
-          title={quizzes.length >= 4 ? "Maximum 4 quizzes per course" : undefined}
+          disabled={!canAddQuiz}
+          title={addDisabledReason}
           className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={15} />
