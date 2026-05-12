@@ -161,16 +161,22 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   if (activeTab === "quiz") {
-    // Find the buddy of the course owner so we can show their mock test too
+    // Find the two participants: course owner and their buddy.
+    // quizBuddyId = the non-owner participant (buddy of the course owner).
+    // otherUserId = from the VIEWER's perspective, the other person they see mock tests from.
+    //   - If the viewer is the owner → the other person is quizBuddyId
+    //   - If the viewer IS the buddy  → the other person is the course owner
     let quizBuddyId: string | null = null;
+    let otherUserId: string | null = null;
     const conn = await db.buddyConnection.findFirst({
       where: { OR: [{ userAId: course.ownerId }, { userBId: course.ownerId }] },
       select: { userAId: true, userBId: true },
     });
     if (conn) {
       quizBuddyId = conn.userAId === course.ownerId ? conn.userBId : conn.userAId;
-      const buddy = await db.user.findUnique({ where: { id: quizBuddyId }, select: { displayName: true } });
-      quizBuddyDisplayName = buddy?.displayName ?? null;
+      otherUserId = session.id === course.ownerId ? quizBuddyId : course.ownerId;
+      const other = await db.user.findUnique({ where: { id: otherUserId }, select: { displayName: true } });
+      quizBuddyDisplayName = other?.displayName ?? null;
     }
 
     const rawQuizzes = await db.quiz.findMany({
@@ -185,7 +191,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         deadline: true,
         createdAt: true,
         mockQuizzes: {
-          where: { ownerId: { in: [session.id, ...(quizBuddyId ? [quizBuddyId] : [])] } },
+          where: { ownerId: { in: [session.id, ...(otherUserId ? [otherUserId] : [])] } },
           select: {
             id: true,
             ownerId: true,
@@ -207,7 +213,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       deadline: q.deadline,
       createdAt: q.createdAt,
       myMockQuiz: q.mockQuizzes.find((mq) => mq.ownerId === session.id) ?? null,
-      buddyMockQuiz: quizBuddyId ? (q.mockQuizzes.find((mq) => mq.ownerId === quizBuddyId) ?? null) : null,
+      buddyMockQuiz: otherUserId ? (q.mockQuizzes.find((mq) => mq.ownerId === otherUserId) ?? null) : null,
     }));
   }
 
