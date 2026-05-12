@@ -55,6 +55,9 @@ export type MockQuizData = {
   notes: string | null;
 } | null;
 
+// Shared shape for mock mid/final exam entries (same fields as MockQuizData)
+export type MockExamData = MockQuizData;
+
 export type QuizEntry = {
   id: string;
   serial: number;
@@ -88,6 +91,12 @@ export type ExamEntry = {
   examDate: Date | string;
   venue: string | null;
   notes: string | null;
+};
+
+export type ExamMockData = {
+  myMock: MockExamData;
+  buddyMock: MockExamData;
+  buddyDisplayName: string | null;
 };
 
 export type PresentationEntry = {

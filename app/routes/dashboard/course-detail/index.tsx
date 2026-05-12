@@ -35,6 +35,7 @@ import type {
   AssignmentEntry,
   CourseLinkEntry,
   ExamEntry,
+  ExamMockData,
   PresentationEntry,
   QuizEntry,
   StorageFile,
@@ -132,6 +133,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     venue: string | null;
     notes: string | null;
   } | null = null;
+  const mockExamShape = {
+    id: true,
+    questionImageKey: true,
+    questionImageName: true,
+    answerImageKey: true,
+    answerImageName: true,
+    notes: true,
+    ownerId: true,
+  } as const;
+  let midMockData: ExamMockData = { myMock: null, buddyMock: null, buddyDisplayName: null };
+  let finalMockData: ExamMockData = { myMock: null, buddyMock: null, buddyDisplayName: null };
   let customLinks: { id: string; label: string; url: string; createdAt: Date }[] = [];
   let presentation: {
     id: string;
@@ -225,18 +237,43 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     });
   }
 
-  if (activeTab === "mid") {
-    midExam = await db.midExam.findUnique({
-      where: { courseId },
-      select: { id: true, syllabus: true, examDate: true, venue: true, notes: true },
+  if (activeTab === "mid" || activeTab === "final") {
+    // Shared buddy lookup for mid + final tabs
+    const conn = await db.buddyConnection.findFirst({
+      where: { OR: [{ userAId: course.ownerId }, { userBId: course.ownerId }] },
+      select: { userAId: true, userBId: true },
     });
-  }
+    let examOtherId: string | null = null;
+    let examBuddyName: string | null = null;
+    if (conn) {
+      const rawBuddyId = conn.userAId === course.ownerId ? conn.userBId : conn.userAId;
+      examOtherId = session.id === course.ownerId ? rawBuddyId : course.ownerId;
+      const other = await db.user.findUnique({ where: { id: examOtherId }, select: { displayName: true } });
+      examBuddyName = other?.displayName ?? null;
+    }
 
-  if (activeTab === "final") {
-    finalExam = await db.finalExam.findUnique({
-      where: { courseId },
-      select: { id: true, syllabus: true, examDate: true, venue: true, notes: true },
-    });
+    const mockSelect = { select: mockExamShape } as const;
+    const fetchMock = async (kind: string) => {
+      const rows = await db.mockExam.findMany({
+        where: { courseId, kind, ownerId: { in: [session.id, ...(examOtherId ? [examOtherId] : [])] } },
+        select: { id: true, ownerId: true, questionImageKey: true, questionImageName: true, answerImageKey: true, answerImageName: true, notes: true },
+      });
+      const myRow = rows.find((r) => r.ownerId === session.id) ?? null;
+      const otherRow = examOtherId ? (rows.find((r) => r.ownerId === examOtherId) ?? null) : null;
+      return { myMock: myRow, buddyMock: otherRow, buddyDisplayName: examBuddyName };
+    };
+
+    if (activeTab === "mid") {
+      [midExam, midMockData] = await Promise.all([
+        db.midExam.findUnique({ where: { courseId }, select: { id: true, syllabus: true, examDate: true, venue: true, notes: true } }),
+        fetchMock("mid"),
+      ]);
+    } else {
+      [finalExam, finalMockData] = await Promise.all([
+        db.finalExam.findUnique({ where: { courseId }, select: { id: true, syllabus: true, examDate: true, venue: true, notes: true } }),
+        fetchMock("final"),
+      ]);
+    }
   }
 
   if (activeTab === "links") {
@@ -357,6 +394,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     assignments,
     midExam,
     finalExam,
+    midMockData,
+    finalMockData,
     customLinks,
     presentation,
     attendanceData,
@@ -832,6 +871,147 @@ export async function action({ request, params }: Route.ActionArgs) {
     throw await flash("success", "Assignment deleted.");
   }
 
+  // ── Mock Exam: set question photo (mid or final) ─────────────────────────
+  if (intent === "set-mock-exam-question") {
+    const { db } = await import("~/lib/db.server");
+    const kind = String(formData.get("kind") ?? "").trim();
+    if (kind !== "mid" && kind !== "final") throw await flash("error", "Invalid exam kind.");
+
+    const raw = formData.get("questionImage");
+    if (!raw || typeof raw !== "object" || typeof (raw as { arrayBuffer?: unknown }).arrayBuffer !== "function")
+      throw await flash("error", "No image provided.");
+    const file = raw as unknown as { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> };
+    if (file.size === 0) throw await flash("error", "No image provided.");
+    if (file.size > 10 * 1024 * 1024) throw await flash("error", "Image must be under 10 MB.");
+    if (!file.type.startsWith("image/")) throw await flash("error", "Only image files are allowed.");
+
+    const { getR2Client } = await import("~/lib/r2.server");
+    const { PutObjectCommand, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    const { env } = await import("~/lib/env.server");
+
+    const existing = await db.mockExam.findUnique({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      select: { questionImageKey: true, answerImageKey: true },
+    });
+    for (const oldKey of [existing?.questionImageKey, existing?.answerImageKey].filter(Boolean) as string[]) {
+      try { await getR2Client().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: oldKey })); } catch { /* ignore */ }
+    }
+
+    const uuid = crypto.randomUUID();
+    const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const key = `mock-exam/${courseId}/${kind}/q-${uuid}.${ext}`;
+    await getR2Client().send(new PutObjectCommand({
+      Bucket: env.R2_BUCKET, Key: key,
+      Body: Buffer.from(await file.arrayBuffer()),
+      ContentType: file.type, ContentLength: file.size,
+    }));
+    await db.mockExam.upsert({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      create: { courseId, kind, ownerId: session.id, questionImageKey: key, questionImageName: file.name.slice(0, 200), answerImageKey: null, answerImageName: null, notes: null },
+      update: { questionImageKey: key, questionImageName: file.name.slice(0, 200), answerImageKey: null, answerImageName: null, notes: null },
+    });
+    throw await flash("success", "Question photo saved.");
+  }
+
+  // ── Mock Exam: set answer photo (mid or final) ────────────────────────────
+  if (intent === "set-mock-exam-answer") {
+    const { db } = await import("~/lib/db.server");
+    const kind = String(formData.get("kind") ?? "").trim();
+    if (kind !== "mid" && kind !== "final") throw await flash("error", "Invalid exam kind.");
+    const notes = String(formData.get("notes") ?? "").trim().slice(0, 2000) || null;
+
+    const mq = await db.mockExam.findUnique({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      select: { id: true, questionImageKey: true, answerImageKey: true },
+    });
+    if (!mq?.questionImageKey) throw await flash("error", "Upload the question photo first.");
+
+    const raw = formData.get("answerImage");
+    let key: string | null = mq.answerImageKey;
+    let name: string | null = null;
+    if (raw && typeof raw === "object" && typeof (raw as { arrayBuffer?: unknown }).arrayBuffer === "function") {
+      const file = raw as unknown as { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> };
+      if (file.size > 0) {
+        if (file.size > 10 * 1024 * 1024) throw await flash("error", "Image must be under 10 MB.");
+        if (!file.type.startsWith("image/")) throw await flash("error", "Only image files are allowed.");
+        const { getR2Client } = await import("~/lib/r2.server");
+        const { PutObjectCommand, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+        const { env } = await import("~/lib/env.server");
+        if (mq.answerImageKey) {
+          try { await getR2Client().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: mq.answerImageKey })); } catch { /* ignore */ }
+        }
+        const uuid = crypto.randomUUID();
+        const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        key = `mock-exam/${courseId}/${kind}/a-${uuid}.${ext}`;
+        name = file.name.slice(0, 200);
+        await getR2Client().send(new PutObjectCommand({
+          Bucket: env.R2_BUCKET, Key: key,
+          Body: Buffer.from(await file.arrayBuffer()),
+          ContentType: file.type, ContentLength: file.size,
+        }));
+      }
+    }
+    await db.mockExam.update({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      data: { answerImageKey: key, answerImageName: name, notes },
+    });
+    throw await flash("success", "Answer saved.");
+  }
+
+  // ── Mock Exam: delete question → resets entire record ────────────────────
+  if (intent === "delete-mock-exam-question") {
+    const { db } = await import("~/lib/db.server");
+    const kind = String(formData.get("kind") ?? "").trim();
+    if (kind !== "mid" && kind !== "final") throw await flash("error", "Invalid exam kind.");
+    const mq = await db.mockExam.findUnique({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      select: { questionImageKey: true, answerImageKey: true },
+    });
+    const keysToDelete = [mq?.questionImageKey, mq?.answerImageKey].filter(Boolean) as string[];
+    if (keysToDelete.length > 0) {
+      try {
+        const { getR2Client } = await import("~/lib/r2.server");
+        const { DeleteObjectsCommand } = await import("@aws-sdk/client-s3");
+        const { env } = await import("~/lib/env.server");
+        await getR2Client().send(new DeleteObjectsCommand({
+          Bucket: env.R2_BUCKET,
+          Delete: { Objects: keysToDelete.map((Key) => ({ Key })), Quiet: true },
+        }));
+      } catch { /* ignore */ }
+    }
+    await db.mockExam.upsert({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      create: { courseId, kind, ownerId: session.id, questionImageKey: null, questionImageName: null, answerImageKey: null, answerImageName: null, notes: null },
+      update: { questionImageKey: null, questionImageName: null, answerImageKey: null, answerImageName: null, notes: null },
+    });
+    throw await flash("success", "Mock test cleared.");
+  }
+
+  // ── Mock Exam: delete answer only ────────────────────────────────────────
+  if (intent === "delete-mock-exam-answer") {
+    const { db } = await import("~/lib/db.server");
+    const kind = String(formData.get("kind") ?? "").trim();
+    if (kind !== "mid" && kind !== "final") throw await flash("error", "Invalid exam kind.");
+    const mq = await db.mockExam.findUnique({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      select: { answerImageKey: true },
+    });
+    if (mq?.answerImageKey) {
+      try {
+        const { getR2Client } = await import("~/lib/r2.server");
+        const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+        const { env } = await import("~/lib/env.server");
+        await getR2Client().send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET, Key: mq.answerImageKey }));
+      } catch { /* ignore */ }
+    }
+    await db.mockExam.upsert({
+      where: { courseId_kind_ownerId: { courseId, kind, ownerId: session.id } },
+      create: { courseId, kind, ownerId: session.id, questionImageKey: null, questionImageName: null, answerImageKey: null, answerImageName: null, notes: null },
+      update: { answerImageKey: null, answerImageName: null, notes: null },
+    });
+    throw await flash("success", "Answer removed.");
+  }
+
   // ── Mid / Final: upsert ────────────────────────────────────────────
   if (intent === "upsert-mid" || intent === "upsert-final") {
     const { db } = await import("~/lib/db.server");
@@ -1082,6 +1262,8 @@ export default function CourseDetailPage() {
     assignments,
     midExam,
     finalExam,
+    midMockData,
+    finalMockData,
     customLinks,
     presentation,
     attendanceData,
@@ -1338,6 +1520,8 @@ export default function CourseDetailPage() {
             kind="mid"
             exam={midExam as ExamEntry | null}
             navigation={navigation}
+            mockData={midMockData as ExamMockData}
+            r2PublicUrl={r2PublicUrl}
           />
         ) : null}
 
@@ -1348,6 +1532,8 @@ export default function CourseDetailPage() {
             kind="final"
             exam={finalExam as ExamEntry | null}
             navigation={navigation}
+            mockData={finalMockData as ExamMockData}
+            r2PublicUrl={r2PublicUrl}
           />
         ) : null}
 

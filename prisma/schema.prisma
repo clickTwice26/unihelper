@@ -51,6 +51,7 @@ model User {
   personalFiles       PersonalFile[]
   attendances         Attendance[]
   mockQuizzes         MockQuiz[]
+  mockExams           MockExam[]
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 }
@@ -138,6 +139,7 @@ model Course {
   presentation Presentation?
   attendances  Attendance[]
   routines     ClassRoutine[]
+  mockExams    MockExam[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -204,6 +206,26 @@ model MockQuiz {
   updatedAt         DateTime @updatedAt
 
   @@unique([quizId, ownerId])
+}
+
+// One Q&A pair per user per exam (mid or final). kind = "mid" | "final".
+model MockExam {
+  id                String   @id @default(cuid())
+  courseId          String
+  kind              String   // "mid" | "final"
+  course            Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  ownerId           String
+  owner             User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  questionImageKey  String?
+  questionImageName String?
+  answerImageKey    String?
+  answerImageName   String?
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([courseId, kind, ownerId])
+  @@index([courseId, kind])
 }
 
 model Assignment {
