@@ -467,6 +467,39 @@ export async function action({ request, params }: Route.ActionArgs) {
     throw await flash("success", `Quiz "${title}" logged.`);
   }
 
+  // ── Quiz: update ───────────────────────────────────────────────────────
+  if (intent === "update-quiz") {
+    const { db } = await import("~/lib/db.server");
+    const quizId = String(formData.get("quizId") ?? "").trim();
+    const title = String(formData.get("title") ?? "")
+      .trim()
+      .slice(0, 200);
+    const syllabus = String(formData.get("syllabus") ?? "")
+      .trim()
+      .slice(0, 2000);
+    const quizDateRaw = String(formData.get("quizDate") ?? "").trim();
+    const deadlineRaw = String(formData.get("deadline") ?? "").trim();
+
+    if (!quizId) throw await flash("error", "Missing quiz ID.");
+    if (!title) throw await flash("error", "Quiz title is required.");
+    if (!syllabus) throw await flash("error", "Syllabus is required.");
+    if (!quizDateRaw) throw await flash("error", "Quiz date is required.");
+
+    const quizDate = new Date(quizDateRaw);
+    if (isNaN(quizDate.getTime())) throw await flash("error", "Invalid quiz date.");
+    const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
+    if (deadline && isNaN(deadline.getTime())) throw await flash("error", "Invalid deadline.");
+
+    const quiz = await db.quiz.findUnique({ where: { id: quizId }, select: { courseId: true } });
+    if (!quiz || quiz.courseId !== courseId) throw await flash("error", "Quiz not found.");
+
+    await db.quiz.update({
+      where: { id: quizId },
+      data: { title, syllabus, quizDate, deadline },
+    });
+    throw await flash("success", `Quiz "${title}" updated.`);
+  }
+
   // ── Quiz: reorder ──────────────────────────────────────────────────────
   if (intent === "reorder-quiz") {
     const { db } = await import("~/lib/db.server");
@@ -524,6 +557,32 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (isNaN(deadline.getTime())) throw await flash("error", "Invalid deadline.");
     await db.assignment.create({ data: { courseId, title, description, deadline } });
     throw await flash("success", `Assignment "${title}" added.`);
+  }
+
+  // ── Assignment: update ─────────────────────────────────────────────
+  if (intent === "update-assignment") {
+    const { db } = await import("~/lib/db.server");
+    const assignmentId = String(formData.get("assignmentId") ?? "").trim();
+    const title = String(formData.get("title") ?? "")
+      .trim()
+      .slice(0, 200);
+    const description = String(formData.get("description") ?? "")
+      .trim()
+      .slice(0, 5000);
+    const deadlineRaw = String(formData.get("deadline") ?? "").trim();
+    if (!assignmentId) throw await flash("error", "Missing assignment ID.");
+    if (!title) throw await flash("error", "Assignment title is required.");
+    if (!description) throw await flash("error", "Description is required.");
+    if (!deadlineRaw) throw await flash("error", "Deadline is required.");
+    const deadline = new Date(deadlineRaw);
+    if (isNaN(deadline.getTime())) throw await flash("error", "Invalid deadline.");
+    const item = await db.assignment.findUnique({ where: { id: assignmentId }, select: { courseId: true } });
+    if (!item || item.courseId !== courseId) throw await flash("error", "Assignment not found.");
+    await db.assignment.update({
+      where: { id: assignmentId },
+      data: { title, description, deadline },
+    });
+    throw await flash("success", `Assignment "${title}" updated.`);
   }
 
   // ── Assignment: delete ─────────────────────────────────────────────

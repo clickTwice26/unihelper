@@ -69,6 +69,29 @@ export async function loader({ request }: Route.LoaderArgs) {
     ownerId = owner.id;
     ownerName = owner.displayName;
     isViewingBuddy = true;
+  } else {
+    const ownCourseCount = await db.course.count({
+      where: { ownerId: session.id, deletedAt: null },
+    });
+
+    if (ownCourseCount === 0) {
+      const buddyConnection = await db.buddyConnection.findFirst({
+        where: { OR: [{ userAId: session.id }, { userBId: session.id }] },
+        select: {
+          userAId: true,
+          userBId: true,
+          userA: { select: { id: true, displayName: true } },
+          userB: { select: { id: true, displayName: true } },
+        },
+      });
+
+      if (buddyConnection) {
+        const buddy = buddyConnection.userAId === session.id ? buddyConnection.userB : buddyConnection.userA;
+        ownerId = buddy.id;
+        ownerName = buddy.displayName;
+        isViewingBuddy = true;
+      }
+    }
   }
 
   const rawPage = parseInt(url.searchParams.get("page") ?? "0", 10);

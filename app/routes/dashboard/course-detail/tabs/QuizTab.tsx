@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { CalendarDays, ClipboardList, Clock, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, ClipboardList, Clock, Edit2, Plus, Trash2 } from "lucide-react";
 
 import { CustomSelect } from "~/components/ui/select";
 import type { QuizEntry } from "../types";
@@ -49,9 +49,26 @@ export function QuizTab({
   navigation: ReturnType<typeof useNavigation>;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState<QuizEntry | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const isSubmitting = navigation.state === "submitting";
   const intent = String(navigation.formData?.get("intent") ?? "");
+  const isEditing = editingQuiz !== null;
+
+  function openCreateForm() {
+    setEditingQuiz(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(quiz: QuizEntry) {
+    setEditingQuiz(quiz);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingQuiz(null);
+  }
 
   function fmt(dateVal: Date | string) {
     return new Date(dateVal).toLocaleDateString(undefined, {
@@ -70,9 +87,9 @@ export function QuizTab({
         </p>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
-          disabled={quizzes.length >= 4}
-          title={quizzes.length >= 4 ? "Maximum 4 quizzes per course" : undefined}
+          onClick={openCreateForm}
+          disabled={!isEditing && quizzes.length >= 4}
+          title={!isEditing && quizzes.length >= 4 ? "Maximum 4 quizzes per course" : undefined}
           className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={15} />
@@ -83,13 +100,17 @@ export function QuizTab({
       {/* New quiz form */}
       {showForm ? (
         <Form
+          key={editingQuiz?.id ?? "new-quiz"}
           method="post"
           preventScrollReset
           className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5"
         >
-          <input type="hidden" name="intent" value="create-quiz" />
+          <input type="hidden" name="intent" value={isEditing ? "update-quiz" : "create-quiz"} />
+          {editingQuiz ? <input type="hidden" name="quizId" value={editingQuiz.id} /> : null}
           <input type="hidden" name="backHref" value={`/dashboard/courses/${courseId}?tab=quiz`} />
-          <h3 className="mb-4 text-sm font-bold text-slate-800">Log a New Quiz</h3>
+          <h3 className="mb-4 text-sm font-bold text-slate-800">
+            {isEditing ? "Edit Quiz" : "Log a New Quiz"}
+          </h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-semibold text-slate-600">Quiz Title / Topic</label>
@@ -98,6 +119,7 @@ export function QuizTab({
                 type="text"
                 required
                 maxLength={200}
+                defaultValue={editingQuiz?.title ?? ""}
                 placeholder="e.g. Mid-term Chapter 3-5"
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
@@ -109,6 +131,7 @@ export function QuizTab({
                 required
                 maxLength={2000}
                 rows={3}
+                defaultValue={editingQuiz?.syllabus ?? ""}
                 placeholder="Chapter 3: Arrays, Chapter 4: Linked Lists…"
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
@@ -119,6 +142,7 @@ export function QuizTab({
                 name="quizDate"
                 type="date"
                 required
+                defaultValue={editingQuiz ? new Date(editingQuiz.quizDate).toISOString().slice(0, 10) : ""}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
             </div>
@@ -129,6 +153,11 @@ export function QuizTab({
               <input
                 name="deadline"
                 type="datetime-local"
+                defaultValue={
+                  editingQuiz?.deadline
+                    ? new Date(editingQuiz.deadline).toISOString().slice(0, 16)
+                    : ""
+                }
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
             </div>
@@ -136,14 +165,18 @@ export function QuizTab({
           <div className="mt-4 flex items-center gap-2">
             <button
               type="submit"
-              disabled={isSubmitting && intent === "create-quiz"}
+              disabled={isSubmitting && intent === (isEditing ? "update-quiz" : "create-quiz")}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
             >
-              {isSubmitting && intent === "create-quiz" ? "Saving…" : "Save Quiz"}
+              {isSubmitting && intent === (isEditing ? "update-quiz" : "create-quiz")
+                ? "Saving…"
+                : isEditing
+                  ? "Save Changes"
+                  : "Save Quiz"}
             </button>
             <button
               type="button"
-              onClick={() => setShowForm(false)}
+              onClick={closeForm}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
             >
               Cancel
@@ -199,6 +232,15 @@ export function QuizTab({
                     </p>
                   </div>
                   <div className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEditForm(quiz)}
+                      className="mr-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                      title="Edit quiz"
+                    >
+                      <Edit2 size={12} />
+                      Edit
+                    </button>
                     {deleteConfirmId === quiz.id ? (
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-slate-500">Delete?</span>

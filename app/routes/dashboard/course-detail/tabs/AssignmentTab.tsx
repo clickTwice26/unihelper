@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { Clock, FileText, Plus, Trash2 } from "lucide-react";
+import { Clock, Edit2, FileText, Plus, Trash2 } from "lucide-react";
 
 import type { AssignmentEntry } from "../types";
 
@@ -14,9 +14,26 @@ export function AssignmentTab({
   navigation: ReturnType<typeof useNavigation>;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<AssignmentEntry | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const isSubmitting = navigation.state === "submitting";
   const intent = String(navigation.formData?.get("intent") ?? "");
+  const isEditing = editingAssignment !== null;
+
+  function openCreateForm() {
+    setEditingAssignment(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(assignment: AssignmentEntry) {
+    setEditingAssignment(assignment);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingAssignment(null);
+  }
 
   function fmt(dateVal: Date | string) {
     return new Date(dateVal).toLocaleString(undefined, {
@@ -40,7 +57,7 @@ export function AssignmentTab({
         </p>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={openCreateForm}
           className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
         >
           <Plus size={15} />
@@ -50,17 +67,21 @@ export function AssignmentTab({
 
       {showForm ? (
         <Form
+          key={editingAssignment?.id ?? "new-assignment"}
           method="post"
           preventScrollReset
           className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5"
         >
-          <input type="hidden" name="intent" value="create-assignment" />
+          <input type="hidden" name="intent" value={isEditing ? "update-assignment" : "create-assignment"} />
+          {editingAssignment ? <input type="hidden" name="assignmentId" value={editingAssignment.id} /> : null}
           <input
             type="hidden"
             name="backHref"
             value={`/dashboard/courses/${courseId}?tab=assignment`}
           />
-          <h3 className="mb-4 text-sm font-bold text-slate-800">Add Assignment</h3>
+          <h3 className="mb-4 text-sm font-bold text-slate-800">
+            {isEditing ? "Edit Assignment" : "Add Assignment"}
+          </h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-semibold text-slate-600">Title</label>
@@ -69,6 +90,7 @@ export function AssignmentTab({
                 type="text"
                 required
                 maxLength={200}
+                defaultValue={editingAssignment?.title ?? ""}
                 placeholder="e.g. Assignment 1 — Sorting Algorithms"
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
@@ -82,6 +104,7 @@ export function AssignmentTab({
                 required
                 maxLength={5000}
                 rows={4}
+                defaultValue={editingAssignment?.description ?? ""}
                 placeholder="Implement QuickSort and MergeSort, submit a report…"
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
@@ -92,6 +115,9 @@ export function AssignmentTab({
                 name="deadline"
                 type="datetime-local"
                 required
+                defaultValue={
+                  editingAssignment ? new Date(editingAssignment.deadline).toISOString().slice(0, 16) : ""
+                }
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none ring-indigo-300 transition focus:border-indigo-400 focus:ring-2"
               />
             </div>
@@ -99,14 +125,18 @@ export function AssignmentTab({
           <div className="mt-4 flex items-center gap-2">
             <button
               type="submit"
-              disabled={isSubmitting && intent === "create-assignment"}
+              disabled={isSubmitting && intent === (isEditing ? "update-assignment" : "create-assignment")}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
             >
-              {isSubmitting && intent === "create-assignment" ? "Saving…" : "Save"}
+              {isSubmitting && intent === (isEditing ? "update-assignment" : "create-assignment")
+                ? "Saving…"
+                : isEditing
+                  ? "Save Changes"
+                  : "Save"}
             </button>
             <button
               type="button"
-              onClick={() => setShowForm(false)}
+              onClick={closeForm}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100"
             >
               Cancel
@@ -157,6 +187,15 @@ export function AssignmentTab({
                     </p>
                   </div>
                   <div className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEditForm(a)}
+                      className="mr-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                      title="Edit assignment"
+                    >
+                      <Edit2 size={12} />
+                      Edit
+                    </button>
                     {deleteConfirmId === a.id ? (
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-slate-500">Delete?</span>
