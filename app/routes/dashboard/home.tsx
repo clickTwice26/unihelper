@@ -29,6 +29,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const in30 = new Date(now);
   in30.setDate(in30.getDate() + 30);
   const in30Str = in30.toISOString().slice(0, 10);
+  const sevenDaysAgo  = new Date(now); sevenDaysAgo.setDate(now.getDate() - 7);
+  const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
 
   const [
     courses,
@@ -37,6 +39,10 @@ export async function loader({ request }: Route.LoaderArgs) {
     buddyCount,
     routineCount,
     upcomingEvents,
+    wardenAlertCount,
+    recentWeightCount,
+    anyWeightLog,
+    monthlyExpenseRows,
   ] = await Promise.all([
     db.course.findMany({
       where: { ownerId: user.id },
@@ -108,6 +114,32 @@ export async function loader({ request }: Route.LoaderArgs) {
       items.sort((a, b) => a.date.localeCompare(b.date));
       return items.slice(0, 8);
     })(),
+    // ── Warden alert count: items inside their urgency window ──
+    (async () => {
+      const cIds = await db.course
+        .findMany({ where: { ownerId: user.id, deletedAt: null }, select: { id: true } })
+        .then((cs) => cs.map((c) => c.id));
+      if (cIds.length === 0) return 0;
+      const plus3 = new Date(now); plus3.setDate(now.getDate() + 3);
+      const plus7 = new Date(now); plus7.setDate(now.getDate() + 7);
+      const [qz, as_, mi, fi, pr] = await Promise.all([
+        db.quiz.count({ where: { courseId: { in: cIds }, quizDate: { gte: now, lte: plus3 } } }),
+        db.assignment.count({ where: { courseId: { in: cIds }, deadline: { gte: now, lte: plus3 } } }),
+        db.midExam.count({ where: { courseId: { in: cIds }, examDate: { gte: now, lte: plus7 } } }),
+        db.finalExam.count({ where: { courseId: { in: cIds }, examDate: { gte: now, lte: plus7 } } }),
+        db.presentation.count({ where: { courseId: { in: cIds }, presentationDate: { gte: now, lte: plus7 } } }),
+      ]);
+      return qz + as_ + mi + fi + pr;
+    })(),
+    // ── Weight logs in last 7 days ──
+    db.weightLog.count({ where: { userId: user.id, date: { gte: sevenDaysAgo } } }),
+    // ── Any weight log ever (existence check) ──
+    db.weightLog.findFirst({ where: { userId: user.id }, select: { id: true } }),
+    // ── Income + expense rows for last 30 days ──
+    db.expense.findMany({
+      where: { userId: user.id, date: { gte: thirtyDaysAgo } },
+      select: { type: true, amount: true },
+    }),
   ]);
 
   // Task counts
@@ -115,6 +147,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   const taskInProgress = taskStats.find((s) => s.status === "IN_PROGRESS")?._count.id ?? 0;
   const taskDone = taskStats.find((s) => s.status === "DONE")?._count.id ?? 0;
   const taskTotal = taskTodo + taskInProgress + taskDone;
+
+  // Aggregate monthly income / expense
+  let monthlyIncome = 0;
+  let monthlyExpense = 0;
+  for (const row of monthlyExpenseRows) {
+    const amt = Number(row.amount);
+    if (row.type === "INCOME") monthlyIncome += amt;
+    else monthlyExpense += amt;
+  }
 
   return {
     user,
@@ -128,6 +169,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     routineCount,
     upcomingEvents,
     todayStr,
+    wardenAlertCount: wardenAlertCount as number,
+    recentWeightCount,
+    hasAnyWeightLog: !!anyWeightLog,
+    monthlyIncome,
+    monthlyExpense,
   };
 }
 
@@ -289,6 +335,11 @@ export default function DashboardHome() {
     routineCount,
     upcomingEvents,
     todayStr,
+    wardenAlertCount,
+    recentWeightCount,
+    hasAnyWeightLog,
+    monthlyIncome,
+    monthlyExpense,
   } = useLoaderData<typeof loader>();
 
   const greeting = (() => {
@@ -300,15 +351,23 @@ export default function DashboardHome() {
 
   const name = user.displayName ?? user.email.split("@")[0];
 
-  // Fill percentages for the two figures
-  const academicPct =
-    taskTotal > 0
-      ? Math.round((taskDone / taskTotal) * 100)
-      : Math.min(courses.length * 20, 50);
-  const wellbeingPct = Math.min(
-    100,
-    Math.max(10, buddyCount * 20 + Math.min(routineCount * 4, 40))
-  );
+  // ── Academic fill: task completion (60%) + warden urgency health (40%) ──
+  // 0 alerts → full 40 pts; each alert costs 8 pts; 5+ alerts → 0 pts
+  const taskScore   = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 60) : Math.min(courses.length * 10, 30);
+  const wardenScore = Math.max(0, 40 - wardenAlertCount * 8);
+  const academicPct = Math.min(100, taskScore + wardenScore);
+
+  // ── Wellbeing fill: weight consistency (50%) + expense health (50%) ──
+  // Weight: logged last 7d → 50; ever logged → 20; never → 0
+  const weightScore  = recentWeightCount > 0 ? 50 : hasAnyWeightLog ? 20 : 0;
+  // Expense: no data → neutral 30; balanced/surplus → 50; deficit → proportional
+  const expenseScore =
+    monthlyExpense === 0
+      ? 30
+      : monthlyIncome >= monthlyExpense
+      ? 50
+      : Math.round((monthlyIncome / monthlyExpense) * 50);
+  const wellbeingPct = Math.min(100, Math.max(5, weightScore + expenseScore));
 
   return (
     <div className="space-y-5">
@@ -353,7 +412,7 @@ export default function DashboardHome() {
             bgColor="#f5f5ff"
             pctColor="#4338ca"
             label="Academic"
-            sublabel={`${taskDone} / ${taskTotal} tasks done`}
+            sublabel={`${taskDone}/${taskTotal} tasks · ${wardenAlertCount === 0 ? "no alerts" : `${wardenAlertCount} alert${wardenAlertCount > 1 ? "s" : ""}`}`}
           />
           {/* Centre divider */}
           <div className="absolute left-1/2 top-4 h-[85%] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-slate-200 to-transparent" />
@@ -365,7 +424,7 @@ export default function DashboardHome() {
             bgColor="#f0fdf9"
             pctColor="#065f46"
             label="Wellbeing"
-            sublabel={`${buddyCount} ${buddyCount === 1 ? "buddy" : "buddies"} · ${routineCount} classes`}
+            sublabel={`${recentWeightCount > 0 ? "weight logged" : "no recent weight"} · ${monthlyExpense === 0 ? "no expenses" : monthlyIncome >= monthlyExpense ? "balanced" : "over budget"}`}
           />
         </div>
 
