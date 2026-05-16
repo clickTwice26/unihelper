@@ -10,6 +10,7 @@ import {
   GripVertical,
   MapPin,
   Moon,
+  Pencil,
   Plus,
   Trash2,
   X,
@@ -206,6 +207,36 @@ export async function action({ request }: Route.ActionArgs) {
     throw await flash("success", "Class copied.");
   }
 
+  if (intent === "update") {
+    const id = String(formData.get("id") ?? "").trim();
+    const dayOfWeek = parseInt(String(formData.get("dayOfWeek") ?? ""), 10);
+    const courseName = String(formData.get("courseName") ?? "").trim().slice(0, 200);
+    const room = String(formData.get("room") ?? "").trim().slice(0, 100) || null;
+    const startTime = String(formData.get("startTime") ?? "").trim();
+    const endTime = String(formData.get("endTime") ?? "").trim();
+    const color = String(formData.get("color") ?? "indigo").trim();
+
+    if (!id) throw await flash("error", "Missing ID.");
+    if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6)
+      throw await flash("error", "Invalid day.");
+    if (!courseName) throw await flash("error", "Course name is required.");
+    if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime))
+      throw await flash("error", "Invalid time format.");
+    if (timeToMins(startTime) >= timeToMins(endTime))
+      throw await flash("error", "End time must be after start time.");
+    if (!COLORS.find((c) => c.id === color))
+      throw await flash("error", "Invalid color.");
+
+    const entry = await db.classRoutine.findUnique({ where: { id }, select: { userId: true } });
+    if (!entry || entry.userId !== session.id) throw await flash("error", "Entry not found.");
+
+    await db.classRoutine.update({
+      where: { id },
+      data: { dayOfWeek, courseName, room, startTime, endTime, color },
+    });
+    throw await flash("success", `"${courseName}" updated.`);
+  }
+
   throw new Response("Unknown intent", { status: 400 });
 }
 
@@ -276,6 +307,202 @@ function CourseSelect({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Edit Class Modal ─────────────────────────────────────────────────────────
+
+function EditClassModal({
+  entry,
+  courses,
+  isSubmitting,
+  onClose,
+}: {
+  entry: RoutineEntry;
+  courses: CourseOption[];
+  isSubmitting: boolean;
+  onClose: () => void;
+}) {
+  const [selectedColor, setSelectedColor] = useState(entry.color);
+  const [selectedDay, setSelectedDay] = useState(entry.dayOfWeek);
+  const [courseName, setCourseName] = useState(entry.courseName);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
+      <div
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative z-10 flex max-h-[92vh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-base font-bold text-slate-900">Edit Class</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto">
+          <Form method="post" preventScrollReset className="space-y-4 px-6 py-5">
+            <input type="hidden" name="intent" value="update" />
+            <input type="hidden" name="id" value={entry.id} />
+            <input type="hidden" name="dayOfWeek" value={selectedDay} />
+
+            {/* Day pill selector */}
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-slate-700">
+                Day <span className="text-red-500">*</span>
+              </p>
+              <div className="grid grid-cols-6 gap-1">
+                {DAYS.map((d) => (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() => setSelectedDay(d.value)}
+                    className={`rounded-lg py-2 text-center text-xs font-bold ring-1 transition
+                      ${
+                        selectedDay === d.value
+                          ? "bg-indigo-600 text-white ring-indigo-600 shadow-sm"
+                          : d.value === 0 || d.value === 6
+                          ? "bg-rose-50 text-rose-500 ring-rose-200 hover:bg-rose-100"
+                          : "text-slate-600 ring-slate-200 hover:bg-slate-50 hover:ring-slate-300"
+                      }`}
+                  >
+                    {d.short}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Course name */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Course Name <span className="text-red-500">*</span>
+              </label>
+              {courses.length > 0 ? (
+                <div className="space-y-2">
+                  <CourseSelect
+                    courses={courses}
+                    value={courseName}
+                    onChange={(v) => setCourseName(v)}
+                  />
+                  <input
+                    type="text"
+                    name="courseName"
+                    required
+                    maxLength={200}
+                    value={courseName}
+                    onChange={(e) => setCourseName(e.target.value)}
+                    placeholder="Or type a custom name…"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  name="courseName"
+                  required
+                  maxLength={200}
+                  value={courseName}
+                  onChange={(e) => setCourseName(e.target.value)}
+                  placeholder="e.g. Software Engineering"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              )}
+            </div>
+
+            {/* Time row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  Start Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  name="startTime"
+                  required
+                  defaultValue={entry.startTime}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  End Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  name="endTime"
+                  required
+                  defaultValue={entry.endTime}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+            </div>
+
+            {/* Room */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Room / Location</label>
+              <input
+                type="text"
+                name="room"
+                maxLength={100}
+                defaultValue={entry.room ?? ""}
+                placeholder="e.g. Room 301, Lab B…"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+
+            {/* Color picker */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Color</label>
+              <div className="flex flex-wrap gap-2">
+                {COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedColor(c.id)}
+                    title={c.label}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full transition ${c.dot}
+                      ${
+                        selectedColor === c.id
+                          ? `ring-2 ring-offset-2 ${c.ring} scale-110`
+                          : "opacity-60 hover:opacity-100"
+                      }`}
+                  >
+                    {selectedColor === c.id && <Check size={12} className="text-white" strokeWidth={3} />}
+                  </button>
+                ))}
+              </div>
+              <input type="hidden" name="color" value={selectedColor} />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {isSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </Form>
+        </div>
+      </div>
     </div>
   );
 }
@@ -485,6 +712,7 @@ export default function RoutinePage() {
 
   const [showModal, setShowModal] = useState(false);
   const [defaultDay, setDefaultDay] = useState(1);
+  const [editingEntry, setEditingEntry] = useState<RoutineEntry | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [draggingEntryId, setDraggingEntryId] = useState<string | null>(null);
   const [dragOverDay, setDragOverDay] = useState<number | null>(null);
@@ -565,6 +793,16 @@ export default function RoutinePage() {
           isSubmitting={isSubmitting}
           defaultDay={defaultDay}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editingEntry && (
+        <EditClassModal
+          entry={editingEntry}
+          courses={courses as CourseOption[]}
+          isSubmitting={isSubmitting}
+          onClose={() => setEditingEntry(null)}
         />
       )}
 
@@ -819,14 +1057,24 @@ export default function RoutinePage() {
                                   </Form>
                                 </div>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteConfirmId(entry.id)}
-                                  className="shrink-0 rounded p-1 text-transparent transition group-hover:text-slate-400 hover:!text-red-500 hover:bg-white/70"
-                                  title="Remove"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                <div className="flex shrink-0 items-center gap-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setDeleteConfirmId(null); setEditingEntry(entry); }}
+                                    className="shrink-0 rounded p-1 text-transparent transition group-hover:text-slate-400 hover:!text-indigo-500 hover:bg-white/70"
+                                    title="Edit"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmId(entry.id)}
+                                    className="shrink-0 rounded p-1 text-transparent transition group-hover:text-slate-400 hover:!text-red-500 hover:bg-white/70"
+                                    title="Remove"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               )}
                             </div>
 
