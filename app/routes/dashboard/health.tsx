@@ -523,81 +523,272 @@ function AddDietModal({ open, onClose, today, pastDescriptions }: { open: boolea
 // ── Weight Chart ──────────────────────────────────────────────────────────────
 
 function WeightChart({ trend }: { trend: { date: string; weight: number }[] }) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [activeRange, setActiveRange] = useState<7 | 14 | 30>(30);
+
+  const data = trend.slice(-activeRange);
+
   if (trend.length === 0) {
     return (
-      <div className="flex h-[140px] items-center justify-center text-sm text-slate-400">
+      <div className="flex h-[200px] items-center justify-center text-sm text-slate-400">
         No weight data yet. Start logging to see your trend.
       </div>
     );
   }
-  const weights = trend.map((t) => t.weight);
-  const minVal  = Math.min(...weights);
-  const maxVal  = Math.max(...weights);
-  const range   = maxVal - minVal || 1;
-  const H       = 120;
-  const W       = 100; // percentage width per point
-  const pts     = trend.map((t, i) => {
-    const x = (i / Math.max(trend.length - 1, 1)) * 100;
-    const y = H - ((t.weight - minVal) / range) * (H - 16);
-    return { ...t, x, y };
-  });
 
-  // SVG polyline
-  const polyline = pts.map((p) => `${p.x}%,${p.y}`).join(" ");
+  // Chart dimensions (SVG viewBox coordinates)
+  const VW = 600, VH = 220;
+  const PAD = { t: 18, r: 20, b: 36, l: 46 };
+  const cW = VW - PAD.l - PAD.r;
+  const cH = VH - PAD.t - PAD.b;
+
+  const weights = data.map((d) => d.weight);
+  const minW = Math.min(...weights);
+  const maxW = Math.max(...weights);
+  const valPad = (maxW - minW) * 0.2 || 2;
+  const yMin = minW - valPad;
+  const yMax = maxW + valPad;
+
+  function xOf(i: number) {
+    if (data.length === 1) return PAD.l + cW / 2;
+    return PAD.l + (i / (data.length - 1)) * cW;
+  }
+  function yOf(w: number) {
+    return PAD.t + (1 - (w - yMin) / (yMax - yMin)) * cH;
+  }
+
+  const pts = data.map((d, i) => ({ ...d, x: xOf(i), y: yOf(d.weight) }));
+
+  // Smooth bezier path using midpoint control points
+  function buildLine(points: { x: number; y: number }[]) {
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const mx = (points[i].x + points[i + 1].x) / 2;
+      d += ` C ${mx} ${points[i].y}, ${mx} ${points[i + 1].y}, ${points[i + 1].x} ${points[i + 1].y}`;
+    }
+    return d;
+  }
+
+  const linePath = buildLine(pts);
+  const areaPath =
+    linePath +
+    ` L ${pts[pts.length - 1].x} ${PAD.t + cH} L ${pts[0].x} ${PAD.t + cH} Z`;
+
+  // Horizontal grid lines
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((frac) => ({
+    val: yMin + frac * (yMax - yMin),
+    y: PAD.t + (1 - frac) * cH,
+  }));
+
+  // Find closest point on mouse move
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const relX = ((e.clientX - rect.left) / rect.width) * VW;
+    let closest = 0, minDist = Infinity;
+    pts.forEach((p, i) => {
+      const dist = Math.abs(p.x - relX);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    });
+    setHoveredIdx(closest);
+  }
+
+  const hp = hoveredIdx !== null ? pts[hoveredIdx] : null;
+  const prevWt = hoveredIdx !== null && hoveredIdx > 0 ? data[hoveredIdx - 1].weight : null;
+  const delta = hp && prevWt !== null ? hp.weight - prevWt : null;
+
+  // Tooltip position clamped inside chart
+  const TW = 142, TH = 56;
+  const tooltipX = hp ? Math.max(PAD.l, Math.min(hp.x - TW / 2, VW - PAD.r - TW)) : 0;
+  const tooltipY = hp ? Math.max(2, hp.y - TH - 16) : 0;
+  const arrowX = hp ? Math.min(Math.max(hp.x - tooltipX, 12), TW - 12) : TW / 2;
+
+  // X-axis label sample indices
+  const maxLabels = Math.min(data.length, 5);
+  const labelIdxs =
+    data.length <= 5
+      ? data.map((_, i) => i)
+      : Array.from({ length: maxLabels }, (_, i) =>
+          Math.round((i * (data.length - 1)) / (maxLabels - 1))
+        );
 
   return (
-    <div className="relative" style={{ height: 140 }}>
-      <svg width="100%" height={H} viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="absolute inset-0 overflow-visible">
-        {/* Gradient fill */}
-        <defs>
-          <linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        <polygon
-          points={`0,${H} ${polyline} 100,${H}`}
-          fill="url(#wgrad)"
-        />
-        <polyline
-          points={polyline}
-          fill="none"
-          stroke="#6366f1"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-        {pts.map((p, i) => (
-          <circle
-            key={i}
-            cx={`${p.x}%`}
-            cy={p.y}
-            r={hovered === i ? 5 : 3}
-            fill={hovered === i ? "#6366f1" : "#fff"}
-            stroke="#6366f1"
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-            style={{ cursor: "pointer" }}
-            onMouseEnter={() => setHovered(i)}
-            onMouseLeave={() => setHovered(null)}
-          />
-        ))}
-      </svg>
-      {/* Tooltip */}
-      {hovered !== null && (
-        <div
-          className="pointer-events-none absolute z-10 -translate-y-full -translate-x-1/2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-lg whitespace-nowrap"
-          style={{ left: `${pts[hovered].x}%`, top: pts[hovered].y - 8 }}>
-          {fmtDate(pts[hovered].date)}: {fmt2(pts[hovered].weight)} kg
+    <div className="space-y-3">
+      {/* Header row: entry count + range tabs */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-400">
+          {data.length} {data.length === 1 ? "entry" : "entries"}
+        </p>
+        <div className="flex items-center gap-0.5 rounded-xl bg-slate-100 p-0.5">
+          {([7, 14, 30] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => { setActiveRange(r); setHoveredIdx(null); }}
+              className={`rounded-[10px] px-3 py-1 text-xs font-semibold transition ${
+                activeRange === r
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {r === 30 ? "All" : `${r}d`}
+            </button>
+          ))}
         </div>
-      )}
-      {/* Y axis labels */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between pb-0 pt-0">
-        <span className="text-[10px] text-slate-400">{fmt2(maxVal)} kg</span>
-        <span className="text-[10px] text-slate-400">{fmt2(minVal)} kg</span>
       </div>
+
+      {data.length === 0 ? (
+        <div className="flex h-[200px] items-center justify-center text-sm text-slate-400">
+          No data in this range.
+        </div>
+      ) : (
+        <svg
+          ref={svgRef}
+          width="100%"
+          viewBox={`0 0 ${VW} ${VH}`}
+          className="overflow-visible"
+          style={{ display: "block" }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoveredIdx(null)}
+        >
+          <defs>
+            <linearGradient id="wAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.22" />
+              <stop offset="70%" stopColor="#6366f1" stopOpacity="0.05" />
+              <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+            </linearGradient>
+            <clipPath id="wClip">
+              <rect x={PAD.l} y={PAD.t} width={cW} height={cH} />
+            </clipPath>
+          </defs>
+
+          {/* Grid lines + Y-axis labels */}
+          {gridLines.map((g, i) => (
+            <g key={i}>
+              <line
+                x1={PAD.l} y1={g.y}
+                x2={VW - PAD.r} y2={g.y}
+                stroke={i === 0 ? "#cbd5e1" : "#e2e8f0"}
+                strokeWidth="0.75"
+              />
+              <text
+                x={PAD.l - 7} y={g.y + 3.5}
+                textAnchor="end"
+                fontSize="9.5"
+                fill="#94a3b8"
+                fontFamily="system-ui,sans-serif"
+              >
+                {fmt2(g.val)}
+              </text>
+            </g>
+          ))}
+
+          {/* Area fill */}
+          <path d={areaPath} fill="url(#wAreaGrad)" clipPath="url(#wClip)" />
+
+          {/* Trend line */}
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#6366f1"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            clipPath="url(#wClip)"
+          />
+
+          {/* Hover vertical guide */}
+          {hp && (
+            <line
+              x1={hp.x} y1={PAD.t}
+              x2={hp.x} y2={PAD.t + cH}
+              stroke="#6366f1"
+              strokeWidth="1"
+              strokeDasharray="4 3"
+              opacity="0.35"
+            />
+          )}
+
+          {/* Data point dots */}
+          {pts.map((p, i) => {
+            const isHov = hoveredIdx === i;
+            return (
+              <g key={i}>
+                {isHov && (
+                  <>
+                    <circle cx={p.x} cy={p.y} r="14" fill="#6366f1" fillOpacity="0.07" />
+                    <circle cx={p.x} cy={p.y} r="8" fill="#6366f1" fillOpacity="0.13" />
+                  </>
+                )}
+                <circle
+                  cx={p.x} cy={p.y}
+                  r={isHov ? 5.5 : 3.5}
+                  fill={isHov ? "#6366f1" : "white"}
+                  stroke="#6366f1"
+                  strokeWidth="2"
+                />
+              </g>
+            );
+          })}
+
+          {/* Tooltip bubble */}
+          {hp && (
+            <g transform={`translate(${tooltipX}, ${tooltipY})`}>
+              <rect width={TW} height={TH} rx="8" fill="#0f172a" opacity="0.93" />
+              {/* Caret arrow */}
+              <polygon
+                points={`${arrowX - 5},${TH} ${arrowX},${TH + 7} ${arrowX + 5},${TH}`}
+                fill="#0f172a"
+                opacity="0.93"
+              />
+              <text
+                x="12" y="23"
+                fill="white"
+                fontSize="13"
+                fontWeight="700"
+                fontFamily="system-ui,sans-serif"
+              >
+                {fmt2(hp.weight)} kg
+                {delta !== null && (
+                  <tspan
+                    fontSize="10"
+                    fill={delta > 0 ? "#f87171" : delta < 0 ? "#34d399" : "#94a3b8"}
+                    dx="7"
+                  >
+                    {delta > 0 ? "▲" : delta < 0 ? "▼" : "●"} {Math.abs(delta).toFixed(1)}
+                  </tspan>
+                )}
+              </text>
+              <text
+                x="12" y="41"
+                fill="#94a3b8"
+                fontSize="10"
+                fontFamily="system-ui,sans-serif"
+              >
+                {fmtDate(hp.date)}
+              </text>
+            </g>
+          )}
+
+          {/* X-axis date labels */}
+          {labelIdxs.map((i) => (
+            <text
+              key={i}
+              x={pts[i].x}
+              y={VH - 5}
+              textAnchor="middle"
+              fontSize="9.5"
+              fill="#94a3b8"
+              fontFamily="system-ui,sans-serif"
+            >
+              {fmtDate(data[i].date)}
+            </text>
+          ))}
+        </svg>
+      )}
     </div>
   );
 }
@@ -670,7 +861,7 @@ function WeightTab({
           <h3 className="text-sm font-bold text-slate-900">Weight Trend</h3>
           <p className="mt-0.5 text-xs text-slate-400">Last up to 30 entries across all time</p>
         </div>
-        <div className="px-6 py-4">
+        <div className="px-5 pt-4 pb-2">
           <WeightChart trend={weightTrend} />
         </div>
       </div>

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Form, useLoaderData, useNavigation } from "react-router";
+import { Form, useFetcher, useLoaderData, useNavigation } from "react-router";
 import {
   BookOpen,
   Check,
   ChevronDown,
   Clock,
+  Copy,
   EyeOff,
+  GripVertical,
   MapPin,
   Moon,
   Plus,
@@ -162,6 +164,46 @@ export async function action({ request }: Route.ActionArgs) {
     if (!entry || entry.userId !== session.id) throw await flash("error", "Entry not found.");
     await db.classRoutine.delete({ where: { id } });
     throw await flash("success", "Class removed.");
+  }
+
+  if (intent === "move") {
+    const id = String(formData.get("id") ?? "").trim();
+    const dayOfWeek = parseInt(String(formData.get("dayOfWeek") ?? ""), 10);
+    if (!id) throw await flash("error", "Missing ID.");
+    if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6)
+      throw await flash("error", "Invalid day.");
+    const entry = await db.classRoutine.findUnique({ where: { id }, select: { userId: true, dayOfWeek: true } });
+    if (!entry || entry.userId !== session.id) throw await flash("error", "Entry not found.");
+    if (entry.dayOfWeek === dayOfWeek) throw redirect("/dashboard/routine", { headers });
+    await db.classRoutine.update({ where: { id }, data: { dayOfWeek } });
+    throw await flash("success", "Class moved.");
+  }
+
+  if (intent === "copy") {
+    const id = String(formData.get("id") ?? "").trim();
+    const dayOfWeek = parseInt(String(formData.get("dayOfWeek") ?? ""), 10);
+    if (!id) throw await flash("error", "Missing ID.");
+    if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6)
+      throw await flash("error", "Invalid day.");
+    const entry = await db.classRoutine.findUnique({
+      where: { id },
+      select: { userId: true, courseName: true, room: true, startTime: true, endTime: true, color: true },
+    });
+    if (!entry || entry.userId !== session.id) throw await flash("error", "Entry not found.");
+    const existing = await db.classRoutine.count({ where: { userId: session.id } });
+    if (existing >= 50) throw await flash("error", "Maximum 50 entries per routine.");
+    await db.classRoutine.create({
+      data: {
+        userId: session.id,
+        dayOfWeek,
+        courseName: entry.courseName,
+        room: entry.room,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        color: entry.color,
+      },
+    });
+    throw await flash("success", "Class copied.");
   }
 
   throw new Response("Unknown intent", { status: 400 });
@@ -439,10 +481,14 @@ export default function RoutinePage() {
   const { entries, courses } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const fetcher = useFetcher();
 
   const [showModal, setShowModal] = useState(false);
   const [defaultDay, setDefaultDay] = useState(1);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [draggingEntryId, setDraggingEntryId] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<number | null>(null);
+  const [isCopyMode, setIsCopyMode] = useState(false);
   const [offDays, setOffDays] = useState<number[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -490,6 +536,24 @@ export default function RoutinePage() {
   function openModalFor(day: number) {
     setDefaultDay(day);
     setShowModal(true);
+  }
+
+  function handleDrop(e: React.DragEvent, targetDay: number) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    const copy = e.altKey;
+    setDraggingEntryId(null);
+    setDragOverDay(null);
+    setIsCopyMode(false);
+    if (!id) return;
+    const draggedEntry = (entries as RoutineEntry[]).find((en) => en.id === id);
+    if (!draggedEntry) return;
+    if (!copy && draggedEntry.dayOfWeek === targetDay) return;
+    const fd = new FormData();
+    fd.append("intent", copy ? "copy" : "move");
+    fd.append("id", id);
+    fd.append("dayOfWeek", String(targetDay));
+    fetcher.submit(fd, { method: "post" });
   }
 
   return (
@@ -618,22 +682,53 @@ export default function RoutinePage() {
             const dayIdx = DAYS.findIndex((d) => d.value === day.value);
             const dayEntries = byDay[dayIdx];
             const isWeekend = day.value === 0 || day.value === 6;
+            const isDragOver = dragOverDay === day.value && draggingEntryId !== null;
             return (
               <div
                 key={day.value}
-                className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm transition-all
+                  ${isDragOver
+                    ? isCopyMode
+                      ? "border-emerald-400 bg-emerald-50/40 ring-2 ring-emerald-300/50"
+                      : "border-indigo-400 bg-indigo-50/40 ring-2 ring-indigo-300/50"
+                    : "border-slate-200 bg-white"
+                  }`}
+                onDragOver={(e) => {
+                  if (!draggingEntryId) return;
+                  e.preventDefault();
+                  const copy = e.altKey;
+                  e.dataTransfer.dropEffect = copy ? "copy" : "move";
+                  setIsCopyMode(copy);
+                  setDragOverDay(day.value);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node))
+                    setDragOverDay(null);
+                }}
+                onDrop={(e) => handleDrop(e, day.value)}
               >
                 {/* Day header */}
                 <div
                   className={`flex items-center justify-between border-b px-4 py-3 ${
-                    isWeekend
-                      ? "border-rose-100 bg-rose-50/60"
-                      : "border-slate-100 bg-slate-50/60"
+                    isDragOver
+                      ? isCopyMode
+                        ? "border-emerald-200 bg-emerald-50/80"
+                        : "border-indigo-200 bg-indigo-50/80"
+                      : isWeekend
+                        ? "border-rose-100 bg-rose-50/60"
+                        : "border-slate-100 bg-slate-50/60"
                   }`}
                 >
                   <div>
-                    <p className={`text-xs font-bold uppercase tracking-wider ${isWeekend ? "text-rose-500" : "text-slate-400"}`}>
+                    <p className={`text-xs font-bold uppercase tracking-wider ${isWeekend && !isDragOver ? "text-rose-500" : isDragOver ? (isCopyMode ? "text-emerald-600" : "text-indigo-600") : "text-slate-400"}`}>
                       {day.short}
+                      {isDragOver && (
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none
+                          bg-current/10">
+                          {isCopyMode ? <Copy size={9} /> : null}
+                          {isCopyMode ? "copy" : "move here"}
+                        </span>
+                      )}
                     </p>
                     <p className="text-sm font-bold text-slate-800">{day.label}</p>
                   </div>
@@ -667,12 +762,32 @@ export default function RoutinePage() {
                         isSubmitting &&
                         String(navigation.formData?.get("intent")) === "delete" &&
                         String(navigation.formData?.get("id")) === entry.id;
+                      const isDraggingThis = draggingEntryId === entry.id;
 
                       return (
                         <div
                           key={entry.id}
-                          className={`group relative rounded-xl border p-3 transition ${c.bg} ${c.border}`}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "copyMove";
+                            e.dataTransfer.setData("text/plain", entry.id);
+                            setDraggingEntryId(entry.id);
+                            setDeleteConfirmId(null);
+                          }}
+                          onDragEnd={() => {
+                            setDraggingEntryId(null);
+                            setDragOverDay(null);
+                            setIsCopyMode(false);
+                          }}
+                          className={`group relative rounded-xl border p-3 transition cursor-grab active:cursor-grabbing select-none
+                            ${c.bg} ${c.border}
+                            ${isDraggingThis ? "opacity-40 scale-[0.97]" : ""}
+                          `}
                         >
+                          {/* Grip handle */}
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 transition pointer-events-none">
+                            <GripVertical size={13} />
+                          </span>
                           {/* Color stripe */}
                           <span className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${c.dot}`} />
 
@@ -775,6 +890,10 @@ export default function RoutinePage() {
                 </span>
               ))}
             </div>
+            <p className="mt-3 text-xs text-slate-400">
+              <GripVertical size={11} className="inline mr-0.5 -mt-0.5" />
+              Drag a class to move it · Hold <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-500">Alt</kbd> while dropping to copy
+            </p>
           </div>
         )}
       </div>
