@@ -429,7 +429,7 @@ export default function WardenPage() {
       fd.append("message", trimmed);
       fd.append("history", JSON.stringify(history));
 
-      const res = await fetch("/api/warden-chat", { method: "POST", body: fd });
+      const res = await fetch("/api/warden/chat", { method: "POST", body: fd });
       const data = (await res.json()) as { reply?: string; error?: string };
 
       if (!res.ok || data.error) {
