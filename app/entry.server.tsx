@@ -92,30 +92,7 @@ export default function handleRequest(
             "Permissions-Policy",
             "camera=(), microphone=(), geolocation=(), payment=()",
           );
-          // Content-Security-Policy — adjust `style-src` if you add more CDN assets
-          responseHeaders.set(
-            "Content-Security-Policy",
-            [
-              "default-src 'self'",
-              // In production, Vite outputs external JS bundles — no inline scripts exist
-              // except React Router's hydration script, which receives the nonce.
-              // In development, Vite injects its own inline HMR scripts that have no nonce,
-              // so we fall back to 'unsafe-inline' to avoid breaking the dev server.
-              process.env.NODE_ENV === "production"
-                ? `script-src 'self' 'nonce-${nonce}'`
-                : "script-src 'self' 'unsafe-inline'",
-              // Tailwind inlines style attributes; Google Fonts needs style-src
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              `img-src 'self' data: https://api.qrserver.com ${env.R2_PUBLIC_URL}`,
-              `frame-src 'self' ${env.R2_PUBLIC_URL}`,
-              "connect-src 'self' ws: wss:",
-              "worker-src 'self' blob:",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join("; "),
-          );
+
 
           pipe(body);
 
