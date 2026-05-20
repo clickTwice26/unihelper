@@ -13,3 +13,4 @@
 # Prisma
 /prisma/dev.db*
 .github
+logs/
