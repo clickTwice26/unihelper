@@ -399,53 +399,13 @@ function TypingIndicator() {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-const WARDEN_SYSTEM_PROMPT = `You are Warden AI, an intelligent academic and personal productivity assistant embedded in UniBuddy — a university student productivity app. You have access to a complete anonymized snapshot of the student's logged data.
-
-IMPORTANT PRIVACY RULES:
-- Never refer to the user by name. Use "you" / "your" only.
-- Never mention emails, passwords, or any identifying information.
-- Do not reveal or repeat raw IDs from the context.
-
-YOUR CAPABILITIES:
-You can answer questions and provide insights about:
-- Courses: enrollment, credit hours, teachers, syllabi
-- Upcoming deadlines: quizzes, assignments, mid/final exams, presentations
-- Warden alerts: items in the urgent preparation window
-- Attendance: per-course present/absent stats and percentages
-- Tasks: to-do list, in-progress items, completed tasks, overdue tasks
-- Weekly class routine: schedule by day, rooms, times
-- Financial tracking: income vs expenses, spending by category and month
-- Health: weight trends, diet logs, meal habits
-- Academic preparation: mock exam completion status
-
-RESPONSE STYLE:
-- Be direct, helpful, and concise. Use bullet points for lists.
-- If data is missing or empty, say so honestly.
-- Give actionable suggestions when appropriate.
-- Do not hallucinate or invent data. Only reference what is in the context.
-- Keep responses focused. For large data sets, summarize and offer to drill down.
-
-The current date is provided in the context. Always reason relative to it for upcoming/overdue calculations.`;
-
 export default function WardenPage() {
-  const { alerts, courseCount, aiContext } = useLoaderData<typeof loader>();
+  const { alerts, courseCount } = useLoaderData<typeof loader>();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const [puterReady, setPuterReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Load Puter.js script once on mount
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if ((window as { puter?: unknown }).puter) { setPuterReady(true); return; }
-    const script = document.createElement("script");
-    script.src = "https://js.puter.com/v2/";
-    script.async = true;
-    script.onload = () => setPuterReady(true);
-    document.head.appendChild(script);
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -453,24 +413,30 @@ export default function WardenPage() {
 
   async function sendMessage(text: string) {
     const trimmed = text.trim().slice(0, 1000);
-    if (!trimmed || isThinking || !puterReady) return;
+    if (!trimmed || isThinking) return;
 
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setInput("");
     setIsThinking(true);
 
     try {
-      const chatMessages = [
-        { role: "system", content: `${WARDEN_SYSTEM_PROMPT}\n\n--- USER DATA CONTEXT ---\n${aiContext}\n--- END CONTEXT ---` },
-        ...messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.text })),
-        { role: "user", content: trimmed },
-      ];
+      const history = messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        text: m.text,
+      }));
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const puter = (window as any).puter;
-      const response = await puter.ai.chat(chatMessages, { model: "x-ai/grok-4-1-fast" });
-      const reply = (response?.message?.content as string) ?? "Sorry, I couldn't generate a response.";
-      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+      const fd = new FormData();
+      fd.append("message", trimmed);
+      fd.append("history", JSON.stringify(history));
+
+      const res = await fetch("/api/warden-chat", { method: "POST", body: fd });
+      const data = (await res.json()) as { reply?: string; error?: string };
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error ?? "AI service unavailable. Please try again.");
+      }
+
+      setMessages((prev) => [...prev, { role: "assistant", text: data.reply! }]);
     } catch (err) {
       const msg = (err as Error)?.message ?? "AI service unavailable. Please try again.";
       setMessages((prev) => [...prev, { role: "assistant", text: msg, isError: true }]);
@@ -620,7 +586,7 @@ export default function WardenPage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-slate-900">Warden AI</p>
-              <p className="truncate text-xs text-slate-400">Powered by Grok via Puter · free</p>
+              <p className="truncate text-xs text-slate-400">Powered by Gemini · your data stays on-server</p>
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
               <Sparkles size={9} />
@@ -645,7 +611,7 @@ export default function WardenPage() {
                       key={chip}
                       type="button"
                       onClick={() => sendMessage(chip)}
-                      disabled={isThinking || !puterReady}
+                      disabled={isThinking}
                       className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-50"
                     >
                       {chip}
@@ -681,14 +647,14 @@ export default function WardenPage() {
               <button
                 type="button"
                 onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isThinking || !puterReady}
+                disabled={!input.trim() || isThinking}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Send size={14} />
               </button>
             </div>
             <p className="mt-1.5 px-1 text-[10px] text-slate-400">
-              Enter to send · Shift+Enter for new line{!puterReady ? " · Loading AI…" : ""}
+              Enter to send · Shift+Enter for new line
             </p>
           </div>
 
