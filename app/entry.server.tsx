@@ -51,6 +51,7 @@ export default function handleRequest(
     const { pipe, abort } = renderToPipeableStream(
       <ServerRouter context={routerContext} url={request.url} nonce={nonce} />,
       {
+        nonce,
         [readyOption]() {
           shellRendered = true;
           const body = new PassThrough({
@@ -101,14 +102,14 @@ export default function handleRequest(
               // In development, Vite injects its own inline HMR scripts that have no nonce,
               // so we fall back to 'unsafe-inline' to avoid breaking the dev server.
               process.env.NODE_ENV === "production"
-                ? `script-src 'self' 'nonce-${nonce}' https://js.puter.com`
-                : "script-src 'self' 'unsafe-inline' https://js.puter.com",
+                ? `script-src 'self' 'nonce-${nonce}'`
+                : "script-src 'self' 'unsafe-inline'",
               // Tailwind inlines style attributes; Google Fonts needs style-src
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               `img-src 'self' data: https://api.qrserver.com ${env.R2_PUBLIC_URL}`,
               `frame-src 'self' ${env.R2_PUBLIC_URL}`,
-              "connect-src 'self' ws: wss: https://api.puter.com https://js.puter.com",
+              "connect-src 'self' ws: wss:",
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",
               "base-uri 'self'",
