@@ -381,11 +381,7 @@ export default function ChatPage() {
           <span className="ml-auto text-[10px] text-slate-300">{buddies.length}</span>
         </div>
 
-        {/* Encrypted badge */}
-        <div className="mx-4 mb-3 flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5">
-          <Lock size={10} className="text-indigo-400" />
-          <p className="text-[10px] font-medium text-indigo-500">AES-256-GCM submit + storage · 3-min TTL</p>
-        </div>
+
 
         {/* List */}
         <div className="flex-1 overflow-y-auto">
@@ -450,10 +446,7 @@ export default function ChatPage() {
                 <p className="truncate text-sm font-bold text-slate-900">
                   {activeBuddy.displayName ?? "Unknown"}
                 </p>
-                <div className="flex items-center gap-1">
-                  <ShieldCheck size={9} className="text-emerald-500" />
-                  <span className="text-[10px] text-slate-400">Encrypted on submit · vanishes in 3 min</span>
-                </div>
+ 
               </div>
               {msgFetcher.state !== "idle" && (
                 <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
