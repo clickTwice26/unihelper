@@ -25,6 +25,8 @@ export const env = cleanEnv(process.env, {
   R2_BUCKET: str(),
   R2_ENDPOINT: str(),
   R2_PUBLIC_URL: str(),
+  // Gemini AI
+  GEMINI_API_KEY: str(),
 });
 
 // Fail hard if a known weak/placeholder secret reaches the server.

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Form, useLoaderData, useNavigation } from "react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Form, useFetcher, useLoaderData, useNavigation } from "react-router";
 import {
   AlertCircle,
   Calendar,
@@ -835,10 +835,29 @@ export default function TasksPage() {
     navigation.state !== "idle" &&
     String(navigation.formData?.get("intent")) === "create";
 
+  const fetcher = useFetcher();
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
+
   const [showModal, setShowModal] = useState(false);
   const [filter, setFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "kanban">("grid");
+
+  // Optimistically reflect a drag-drop status change before the fetcher resolves
+  const optimisticTasks = useMemo((): TaskEntry[] => {
+    if (
+      fetcher.state !== "idle" &&
+      String(fetcher.formData?.get("intent")) === "update-status"
+    ) {
+      const id = String(fetcher.formData!.get("id"));
+      const newStatus = String(fetcher.formData!.get("status")) as TaskStatus;
+      return (tasks as TaskEntry[]).map((t) =>
+        t.id === id ? { ...t, status: newStatus } : t,
+      );
+    }
+    return tasks as TaskEntry[];
+  }, [fetcher.state, fetcher.formData, tasks]);
 
   // Auto-close modal after successful create
   const wasCreating = useRef(false);
@@ -875,13 +894,13 @@ export default function TasksPage() {
 
   // Kanban: search-only filter (status handled by columns)
   const kanbanOwn = q
-    ? tasks.filter(
+    ? optimisticTasks.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
           (t.notes ?? "").toLowerCase().includes(q) ||
           t.assignees.some((a) => a.toLowerCase().includes(q)),
       )
-    : tasks;
+    : optimisticTasks;
 
   // Buddy tasks filtered by search query
   const buddyFiltered = q
@@ -936,7 +955,6 @@ export default function TasksPage() {
               {([
                 { key: "grid" as const, Icon: LayoutGrid, label: "Grid" },
                 { key: "list" as const, Icon: LayoutList, label: "List" },
-                { key: "kanban" as const, Icon: LayoutDashboard, label: "Kanban" },
               ]).map(({ key, Icon, label }) => (
                 <button
                   key={key}
@@ -953,6 +971,18 @@ export default function TasksPage() {
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setViewMode("kanban")}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm transition ${
+                viewMode === "kanban"
+                  ? "border-indigo-600 bg-indigo-600 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <LayoutDashboard size={15} />
+              <span>Kanban</span>
+            </button>
             <button
               type="button"
               onClick={() => setShowModal(true)}
@@ -1085,8 +1115,38 @@ export default function TasksPage() {
               const cfg = STATUS_CONFIG[status];
               const ownCol = kanbanOwn.filter((t) => t.status === status);
               const buddyCol = buddyFiltered.filter((t) => t.status === status);
+              const isDragTarget = dragOverStatus === status && draggedId !== null;
               return (
-                <div key={status} className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/50 shadow-sm">
+                <div
+                  key={status}
+                  className={`flex flex-col rounded-2xl border shadow-sm transition-all duration-150 ${
+                    isDragTarget
+                      ? "border-indigo-400 bg-indigo-50/60 ring-2 ring-indigo-300/40"
+                      : "border-slate-200 bg-slate-50/50"
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (dragOverStatus !== status) setDragOverStatus(status);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setDragOverStatus(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverStatus(null);
+                    if (!draggedId) return;
+                    const task = optimisticTasks.find((t) => t.id === draggedId);
+                    if (!task || task.status === status) { setDraggedId(null); return; }
+                    fetcher.submit(
+                      { intent: "update-status", id: draggedId, status },
+                      { method: "post", action: "/dashboard/tasks" },
+                    );
+                    setDraggedId(null);
+                  }}
+                >
                   <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`h-2.5 w-2.5 rounded-full ${cfg.dotCls}`} />
@@ -1108,13 +1168,35 @@ export default function TasksPage() {
                     style={{ minHeight: "120px", maxHeight: "calc(100vh - 320px)" }}
                   >
                     {ownCol.map((t) => (
-                      <TaskCard key={t.id} task={t as TaskEntry} navigation={navigation} />
+                      <div
+                        key={t.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedId(t.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          // Tiny delay so the ghost image renders before opacity changes
+                          requestAnimationFrame(() => setDraggedId(t.id));
+                        }}
+                        onDragEnd={() => {
+                          setDraggedId(null);
+                          setDragOverStatus(null);
+                        }}
+                        className={`cursor-grab active:cursor-grabbing transition-opacity duration-150 ${
+                          draggedId === t.id ? "opacity-40" : "opacity-100"
+                        }`}
+                      >
+                        <TaskCard task={t as TaskEntry} navigation={navigation} />
+                      </div>
                     ))}
                     {buddyCol.map((t) => (
                       <KanbanBuddyCard key={t.id} task={t} />
                     ))}
                     {ownCol.length === 0 && buddyCol.length === 0 && (
-                      <p className="py-10 text-center text-xs text-slate-400">No tasks</p>
+                      <p className={`py-10 text-center text-xs transition-colors ${
+                        isDragTarget ? "text-indigo-400 font-medium" : "text-slate-400"
+                      }`}>
+                        {isDragTarget ? "Drop here" : "No tasks"}
+                      </p>
                     )}
                   </div>
                 </div>

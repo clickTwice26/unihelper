@@ -26,6 +26,7 @@ export default [
   route("api/search", "routes/api.search.ts"),
   route("api/storage/delete", "routes/api.storage-delete.ts"),
   route("api/chat/send", "routes/api.chat-send.ts"),
+  route("api/warden/chat", "routes/api.warden-chat.ts"),
   route("share/file/:token", "routes/share-file.tsx"),
   route("health", "routes/health.ts"),
   route("ready", "routes/ready.ts"),

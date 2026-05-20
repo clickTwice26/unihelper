@@ -1,15 +1,20 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, useLoaderData } from "react-router";
 import {
   AlertTriangle,
   BookMarked,
   BookOpen,
+  Bot,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
   FileText,
   GraduationCap,
   Monitor,
+  Send,
   ShieldCheck,
+  Sparkles,
+  X,
 } from "lucide-react";
 
 import type { Route } from "./+types/warden";
@@ -29,6 +34,8 @@ type WardenAlert = {
   threshold: number;
   tab: string;
 };
+
+type ChatMessage = { role: "user" | "assistant"; text: string; isError?: boolean };
 
 // ── Loader ─────────────────────────────────────────────────────────────────────
 
@@ -189,10 +196,24 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Sort: most urgent first
   alerts.sort((a, b) => a.daysUntil - b.daysUntil);
 
-  return { alerts, courseCount: courses.length };
+  const { buildUserContext } = await import("~/lib/warden-ai.server");
+  const aiContext = await buildUserContext(session.id, db);
+
+  return { alerts, courseCount: courses.length, aiContext };
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
+
+const SUGGESTION_CHIPS = [
+  "What courses am I enrolled in?",
+  "What are my upcoming deadlines?",
+  "Show my attendance per course",
+  "Summarize my tasks",
+  "How much did I spend this month?",
+  "Show my weight trend",
+  "What's on my schedule today?",
+  "Any active warden alerts?",
+];
 
 const KIND_CONFIG: Record<
   WardenAlert["kind"],
@@ -279,7 +300,7 @@ const GUIDELINES: Array<{
   },
 ];
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function urgencyLabel(daysUntil: number): string {
   if (daysUntil === 0) return "Today";
@@ -293,11 +314,183 @@ function urgencyBadgeCls(daysUntil: number): string {
   return "bg-slate-100 text-slate-600";
 }
 
+// ── AI message bubble ──────────────────────────────────────────────────────────
+
+function FormattedText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1">
+      {lines.map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        const bulletMatch = line.match(/^(\s*[-*•])\s+(.+)/);
+        if (bulletMatch) {
+          return (
+            <div key={i} className="flex gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+              <span>{renderBold(bulletMatch[2])}</span>
+            </div>
+          );
+        }
+        if (line.startsWith("### ")) return <p key={i} className="font-bold text-slate-900">{line.slice(4)}</p>;
+        if (line.startsWith("## ")) return <p key={i} className="font-bold text-slate-900">{line.slice(3)}</p>;
+        return <p key={i}>{renderBold(line)}</p>;
+      })}
+    </div>
+  );
+}
+
+function renderBold(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
+function MessageBubble({ msg }: { msg: ChatMessage }) {
+  if (msg.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
+          {msg.text}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow-sm ${
+        msg.isError ? "bg-red-100" : "bg-indigo-100"
+      }`}>
+        {msg.isError ? <X size={14} className="text-red-600" /> : <Bot size={14} className="text-indigo-600" />}
+      </div>
+      <div className={`max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+        msg.isError
+          ? "bg-red-50 text-red-700 ring-1 ring-red-200"
+          : "bg-white text-slate-800 ring-1 ring-slate-200"
+      }`}>
+        <FormattedText text={msg.text} />
+      </div>
+    </div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 shadow-sm">
+        <Bot size={14} className="text-indigo-600" />
+      </div>
+      <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+            style={{ animationDelay: `${i * 0.15}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────────
+
+const WARDEN_SYSTEM_PROMPT = `You are Warden AI, an intelligent academic and personal productivity assistant embedded in UniBuddy — a university student productivity app. You have access to a complete anonymized snapshot of the student's logged data.
+
+IMPORTANT PRIVACY RULES:
+- Never refer to the user by name. Use "you" / "your" only.
+- Never mention emails, passwords, or any identifying information.
+- Do not reveal or repeat raw IDs from the context.
+
+YOUR CAPABILITIES:
+You can answer questions and provide insights about:
+- Courses: enrollment, credit hours, teachers, syllabi
+- Upcoming deadlines: quizzes, assignments, mid/final exams, presentations
+- Warden alerts: items in the urgent preparation window
+- Attendance: per-course present/absent stats and percentages
+- Tasks: to-do list, in-progress items, completed tasks, overdue tasks
+- Weekly class routine: schedule by day, rooms, times
+- Financial tracking: income vs expenses, spending by category and month
+- Health: weight trends, diet logs, meal habits
+- Academic preparation: mock exam completion status
+
+RESPONSE STYLE:
+- Be direct, helpful, and concise. Use bullet points for lists.
+- If data is missing or empty, say so honestly.
+- Give actionable suggestions when appropriate.
+- Do not hallucinate or invent data. Only reference what is in the context.
+- Keep responses focused. For large data sets, summarize and offer to drill down.
+
+The current date is provided in the context. Always reason relative to it for upcoming/overdue calculations.`;
+
 export default function WardenPage() {
-  const { alerts, courseCount } = useLoaderData<typeof loader>();
+  const { alerts, courseCount, aiContext } = useLoaderData<typeof loader>();
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+  const [puterReady, setPuterReady] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load Puter.js script once on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if ((window as { puter?: unknown }).puter) { setPuterReady(true); return; }
+    const script = document.createElement("script");
+    script.src = "https://js.puter.com/v2/";
+    script.async = true;
+    script.onload = () => setPuterReady(true);
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isThinking]);
+
+  async function sendMessage(text: string) {
+    const trimmed = text.trim().slice(0, 1000);
+    if (!trimmed || isThinking || !puterReady) return;
+
+    setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
+    setInput("");
+    setIsThinking(true);
+
+    try {
+      const chatMessages = [
+        { role: "system", content: `${WARDEN_SYSTEM_PROMPT}\n\n--- USER DATA CONTEXT ---\n${aiContext}\n--- END CONTEXT ---` },
+        ...messages.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.text })),
+        { role: "user", content: trimmed },
+      ];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const puter = (window as any).puter;
+      const response = await puter.ai.chat(chatMessages, { model: "x-ai/grok-4-1-fast" });
+      const reply = (response?.message?.content as string) ?? "Sorry, I couldn't generate a response.";
+      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+    } catch (err) {
+      const msg = (err as Error)?.message ?? "AI service unavailable. Please try again.";
+      setMessages((prev) => [...prev, { role: "assistant", text: msg, isError: true }]);
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1fr_420px] lg:items-start">
+      {/* ── Left column ── */}
+      <div className="space-y-8">
+
       {/* Hero */}
       <div className="flex items-start gap-4">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
@@ -379,7 +572,6 @@ export default function WardenPage() {
           <div className="flex flex-col gap-3">
             {alerts.map((alert, idx) => {
               const cfg = KIND_CONFIG[alert.kind];
-              const isUrgent = alert.daysUntil <= Math.ceil(alert.threshold / 2);
               return (
                 <Link
                   key={idx}
@@ -414,6 +606,97 @@ export default function WardenPage() {
           </div>
         )}
       </section>
+
+      </div>{/* end left column */}
+
+      {/* ── Right column: AI chat ── */}
+      <div className="lg:sticky lg:top-6">
+        <div className="flex h-[calc(100vh-7rem)] min-h-[500px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
+
+          {/* Header */}
+          <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+              <Bot size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-900">Warden AI</p>
+              <p className="truncate text-xs text-slate-400">Powered by Grok via Puter · free</p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+              <Sparkles size={9} />
+              No personal info shared
+            </span>
+          </div>
+
+          {/* Messages */}
+          <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+            {messages.length === 0 && !isThinking && (
+              <div className="flex flex-col items-center justify-center gap-4 py-6 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100">
+                  <Bot size={28} className="text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Ask me anything about your academic life</p>
+                  <p className="mt-1 text-xs text-slate-400">I can see your courses, tasks, expenses, health data, attendance, and more.</p>
+                </div>
+                <div className="flex w-full flex-wrap justify-center gap-2 pt-1">
+                  {SUGGESTION_CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => sendMessage(chip)}
+                      disabled={isThinking || !puterReady}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-50"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg, i) => (
+              <MessageBubble key={i} msg={msg} />
+            ))}
+
+            {isThinking && <TypingIndicator />}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="shrink-0 border-t border-slate-200 bg-white p-3">
+            <div className="flex items-end gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about your courses, tasks, expenses…"
+                rows={1}
+                maxLength={1000}
+                disabled={isThinking}
+                className="max-h-32 flex-1 resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60"
+                style={{ scrollbarWidth: "none" }}
+              />
+              <button
+                type="button"
+                onClick={() => sendMessage(input)}
+                disabled={!input.trim() || isThinking || !puterReady}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Send size={14} />
+              </button>
+            </div>
+            <p className="mt-1.5 px-1 text-[10px] text-slate-400">
+              Enter to send · Shift+Enter for new line{!puterReady ? " · Loading AI…" : ""}
+            </p>
+          </div>
+
+        </div>
+      </div>{/* end right column */}
+
     </div>
   );
 }
+
+export { RouteErrorBoundary as ErrorBoundary } from "~/components/RouteErrorBoundary";
