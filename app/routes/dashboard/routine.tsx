@@ -155,7 +155,7 @@ export async function action({ request }: Route.ActionArgs) {
     await db.classRoutine.create({
       data: { userId: session.id, dayOfWeek, courseName, room, startTime, endTime, color },
     });
-    throw await flash("success", `"${courseName}" added to ${DAYS[dayOfWeek].label}.`);
+    throw await flash("success", `"${courseName}" added to ${DAYS.find((d) => d.value === dayOfWeek)?.label ?? "your routine"}.`);
   }
 
   if (intent === "delete") {
