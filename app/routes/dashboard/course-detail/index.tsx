@@ -385,6 +385,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     course,
     backHref,
     viewerId: session.id,
+    // true for the owner AND for accepted buddies — server already enforced canAccessCourses above
+    canModify: true,
     storageFiles,
     storageUsageBytes,
     storagePath,
@@ -1253,6 +1255,7 @@ export default function CourseDetailPage() {
     course,
     backHref,
     viewerId,
+    canModify,
     storageFiles,
     storageUsageBytes,
     storagePath,
@@ -1272,7 +1275,7 @@ export default function CourseDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const isOwner = viewerId === course.ownerId;
+  const isOwner = canModify;
 
   const rawTab = searchParams.get("tab") ?? "information";
   const activeTab: Tab = (validTabs.includes(rawTab as Tab) ? rawTab : "information") as Tab;

@@ -124,11 +124,9 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "").trim();
 
-  // Sanitize ownerId from form — never trust user input for URL construction
-  let ownerId = String(formData.get("ownerId") ?? "").trim();
-  if (!ownerId || !/^[a-z0-9_-]+$/i.test(ownerId)) {
-    ownerId = session.id;
-  }
+  // Sanitize ownerId from form — course creation always belongs to the session user;
+  // buddies may still edit/delete via the course-detail page.
+  const ownerId = session.id;
 
   const redirectTo =
     ownerId !== session.id
