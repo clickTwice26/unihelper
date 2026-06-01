@@ -385,25 +385,12 @@ function EditClassModal({
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Course Name <span className="text-red-500">*</span>
               </label>
-              {courses.length > 0 ? (
-                <div className="space-y-2">
-                  <CourseSelect
-                    courses={courses}
-                    value={courseName}
-                    onChange={(v) => setCourseName(v)}
-                  />
-                  <input
-                    type="text"
-                    name="courseName"
-                    required
-                    maxLength={200}
-                    value={courseName}
-                    onChange={(e) => setCourseName(e.target.value)}
-                    placeholder="Or type a custom name…"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </div>
-              ) : (
+              <div className="space-y-2">
+                <CourseSelect
+                  courses={courses}
+                  value={courseName}
+                  onChange={(v) => setCourseName(v)}
+                />
                 <input
                   type="text"
                   name="courseName"
@@ -411,10 +398,10 @@ function EditClassModal({
                   maxLength={200}
                   value={courseName}
                   onChange={(e) => setCourseName(e.target.value)}
-                  placeholder="e.g. Software Engineering"
+                  placeholder="Or type a custom name…"
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
-              )}
+              </div>
             </div>
 
             {/* Time row */}
@@ -582,25 +569,12 @@ function AddClassModal({
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Course Name <span className="text-red-500">*</span>
               </label>
-              {courses.length > 0 ? (
-                <div className="space-y-2">
-                  <CourseSelect
-                    courses={courses}
-                    value={courseName}
-                    onChange={(v) => setCourseName(v)}
-                  />
-                  <input
-                    type="text"
-                    name="courseName"
-                    required
-                    maxLength={200}
-                    value={courseName}
-                    onChange={(e) => setCourseName(e.target.value)}
-                    placeholder="Or type a custom name…"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </div>
-              ) : (
+              <div className="space-y-2">
+                <CourseSelect
+                  courses={courses}
+                  value={courseName}
+                  onChange={(v) => setCourseName(v)}
+                />
                 <input
                   type="text"
                   name="courseName"
@@ -608,10 +582,10 @@ function AddClassModal({
                   maxLength={200}
                   value={courseName}
                   onChange={(e) => setCourseName(e.target.value)}
-                  placeholder="e.g. Software Engineering"
+                  placeholder="Or type a custom name…"
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
-              )}
+              </div>
             </div>
 
             {/* Time row */}
